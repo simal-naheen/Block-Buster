@@ -1,5 +1,27 @@
 #include <SFML/Graphics.hpp>
 #include <optional>
+using namespace sf;
+// Input Function
+
+void handleInput(RenderWindow &window)
+{
+    while (const std::optional event = window.pollEvent())
+    {
+        if (event->is<sf::Event::Closed>())
+            window.close();
+    }
+}
+
+void updateGame()
+{
+}
+
+void drawGame(RenderWindow &window)
+{
+
+    window.clear(sf::Color(15, 15, 35));
+    window.display();
+}
 
 // Main Body
 int main()
@@ -9,14 +31,8 @@ int main()
 
     while (window.isOpen())
     {
-        while (const std::optional event = window.pollEvent())
-        {
-            if (event->is<sf::Event::Closed>())
-                window.close();
-        }
-
-        window.clear(sf::Color(15, 15, 35));
-
-        window.display();
+        handleInput(window);
+        updateGame();
+        drawGame(window);
     }
 }
