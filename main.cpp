@@ -3,6 +3,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <vector>
 
 // Constants
 
@@ -17,7 +18,7 @@ const int COLS = 10;
 const int BRICK_W = 60;
 const int BRICK_H = 25;
 const int BRICKS_Y = 100;
-
+const float GAP = 2.f;
 // Paddle
 const int PADDLE_W = 100;
 const int PADDLE_H = 14;
@@ -116,6 +117,54 @@ void drawHUD(sf::RenderWindow &window, const sf::Font &font)
 
 void drawBricks(sf::RenderWindow &window)
 {
+    // Colour for each number in the bricks array (0 = no brick)
+    sf::Color colors[4] = {sf::Color(25, 25, 45),
+                           sf::Color::Green,
+                           sf::Color::Yellow,
+                           sf::Color::Red};
+
+    // One shape only, smaller than the box so a gap shows
+    sf::RectangleShape brick({BRICK_W - GAP, BRICK_H - GAP});
+
+    for (int r = 0; r < ROWS; r++)
+    {
+        for (int c = 0; c < COLS; c++)
+        {
+            // Skipping the empty cells
+            if (bricks[r][c] == 0)
+            {
+                continue;
+            }
+
+            brick.setFillColor(colors[bricks[r][c]]);
+
+            // Box position never changes, GAP / 2 puts the shape in the middle of the box
+            brick.setPosition({c * BRICK_W + GAP / 2,
+                               BRICKS_Y + r * BRICK_H + GAP / 2});
+
+            window.draw(brick);
+        }
+    }
+}
+
+// Drawing the paddle
+
+void drawPaddle(sf::RenderWindow &window)
+{
+    sf::RectangleShape padddle({PADDLE_W, PADDLE_H});
+    padddle.setFillColor(sf::Color::Green);
+    padddle.setPosition({250, 650});
+    window.draw(padddle);
+}
+
+// Drawing the Ball
+
+void drawBall(sf::RenderWindow &window)
+{
+    sf::CircleShape ball({BALL_SIZE});
+    ball.setFillColor(sf::Color::White);
+    ball.setPosition({300, 350});
+    window.draw(ball);
 }
 
 // Draw Function
@@ -125,6 +174,8 @@ void drawGame(sf::RenderWindow &window, const sf::Font &font)
     window.clear(sf::Color(15, 15, 35));
     drawBricks(window);
     drawHUD(window, font);
+    drawPaddle(window);
+    drawBall(window);
     window.display();
 }
 
