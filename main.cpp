@@ -1,5 +1,7 @@
 #include <SFML/Graphics.hpp>
 #include <optional>
+#include <iostream>
+#include <fstream>
 using namespace sf;
 // Input Function
 
@@ -16,6 +18,35 @@ void updateGame()
 {
 }
 
+// Writing getting the values in 2D Array
+
+void brickArr(int arr[][100], int &rows, int &cols)
+{
+    std::ifstream fin("level.txt");
+
+    // Checking the file
+
+    if (!fin)
+    {
+        std::cout << "File Not Found";
+        return;
+    }
+
+    // Checking the rows and cols
+
+    fin >> rows >> cols;
+
+    // Inputting 2D array
+
+    for (int i = 0; i < rows; i++)
+    {
+        for (int j = 0; j < cols; j++)
+        {
+            fin >> arr[i][j];
+        }
+    }
+}
+
 void drawGame(RenderWindow &window)
 {
 
@@ -28,6 +59,10 @@ int main()
 {
     sf::RenderWindow window(sf::VideoMode({600, 700}), "Block Buster");
     window.setFramerateLimit(60);
+    int bricks[100][100];
+    int rows, cols;
+    brickArr(bricks, rows, cols);
+    std::cout << rows << cols;
 
     while (window.isOpen())
     {
