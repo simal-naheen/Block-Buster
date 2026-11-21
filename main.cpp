@@ -57,12 +57,30 @@ void drawGame(RenderWindow &window)
 // Main Body
 int main()
 {
-    sf::RenderWindow window(sf::VideoMode({600, 700}), "Block Buster");
-    window.setFramerateLimit(60);
+    // Creating the Variables and constants
     int bricks[100][100];
     int rows, cols;
+    int lives = 3;
+    int score = 0;
+    // Constants
+
+    // Brick
+    int const brickW = 60;
+    int const brickH = 25;
+    // Paddle
+    int const paddleW = 100;
+    int const paddleH = 14;
+    // Ball
+    int const ballW = 12;
+    int const ballH = 12;
+
+    // Window Creation
+    sf::RenderWindow window(sf::VideoMode({600, 700}), "Block Buster");
+    window.setFramerateLimit(60);
+
+    // Creating Bricks Array
+
     brickArr(bricks, rows, cols);
-    std::cout << rows << cols;
 
     while (window.isOpen())
     {
