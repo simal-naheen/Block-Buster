@@ -65,9 +65,10 @@ void bounceOnPaddle()
 
         // Getting the part
         dy = -5;
+        ballY = paddleY - BALL_SIZE;
         int part = (ballX + 6 - paddleX) * 4 / PADDLE_W;
         std::cout << "part: " << part << "\n";
-        if (part == 0)
+        if (part <= 0)
         {
             dx = -6;
         }
@@ -200,6 +201,7 @@ void moveBall()
 
     if (ballY < HUD_H)
     {
+        ballY = ballY - dy;
         dy = -dy;
     }
 }
