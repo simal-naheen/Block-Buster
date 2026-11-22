@@ -45,6 +45,50 @@ float dx = 0.f;
 float dy = 0.f;
 bool start = false;
 
+// Ball and Paddle Collision
+
+void bounceOnPaddle()
+{
+    // check: 4 comparisons + dy > 0
+    int leftB = ballX;
+    int rightB = ballX + BALL_SIZE;
+    int bottomB = ballY + BALL_SIZE;
+    int topB = ballY;
+
+    int leftP = paddleX;
+    int rightP = paddleX + PADDLE_W;
+    int bottomP = paddleY + PADDLE_H;
+    int topP = paddleY;
+
+    if (dy > 0 && leftB < rightP && rightB > leftP && bottomB > topP && topB < bottomP)
+    {
+
+        // Getting the part
+        dy = -5;
+        int part = (ballX + 6 - paddleX) * 4 / PADDLE_W;
+        std::cout << "part: " << part << "\n";
+        if (part == 0)
+        {
+            dx = -6;
+        }
+        else if (part == 1)
+        {
+            dx = -3;
+        }
+        else if (part == 2)
+        {
+            dx = 3;
+        }
+        else
+        {
+            dx = 6;
+        }
+    }
+
+    //     part nikalo, clamp karo
+    //     dx choose karo
+}
+
 // Writing getting the values in 2D Array
 
 bool loadLevel(int arr[][COLS])
@@ -196,6 +240,7 @@ void updateGame()
 {
     KeyboardInputFP();
     moveBall();
+    bounceOnPaddle();
 }
 
 // Score Text
