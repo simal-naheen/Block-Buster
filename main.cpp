@@ -3,7 +3,8 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include <vector>
+#include <cstdlib>
+#include <ctime>
 
 // Constants
 
@@ -31,6 +32,18 @@ const int BALL_SIZE = 12;
 int bricks[ROWS][COLS];
 int lives = 3;
 int score = 0;
+
+// VELOCITIES AND POSITION
+
+float paddleX = 250.f;
+float paddleY = 650.f;
+float const paddleS = 8.f;
+
+float ballX = paddleX + 44.f;
+float ballY = 638.f;
+float dx = 0.f;
+float dy = 0.f;
+bool start = false;
 
 // Writing getting the values in 2D Array
 
@@ -86,6 +99,67 @@ bool loadResources(sf::Font &font)
     return true;
 }
 
+// Keyboard Inputs for paddle
+
+void KeyboardInputFP()
+{
+
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left))
+    {
+        paddleX = paddleX - paddleS;
+    }
+    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right))
+    {
+        paddleX = paddleX + paddleS;
+    }
+
+    if (paddleX < 0)
+    {
+        paddleX = 0;
+    }
+
+    if (paddleX > WINDOW_W - PADDLE_W)
+    {
+        paddleX = WINDOW_W - PADDLE_W;
+    }
+    if (!start)
+    {
+        ballX = paddleX + (PADDLE_W - BALL_SIZE) / 2;
+        ballY = 638.f;
+    }
+}
+
+// Starting the Velocity of the ball
+
+void moveBall()
+{
+    if (!start)
+    {
+        return;
+    }
+
+    if (start)
+    {
+        ballX = ballX + dx;
+    }
+
+    if (ballX < 0 || ballX > WINDOW_W - BALL_SIZE)
+    {
+        ballX = ballX - dx;
+        dx = -dx;
+    }
+
+    if (start)
+    {
+        ballY = ballY + dy;
+    }
+
+    if (ballY < HUD_H)
+    {
+        dy = -dy;
+    }
+}
+
 // Input Function
 
 void handleInput(sf::RenderWindow &window)
@@ -93,7 +167,26 @@ void handleInput(sf::RenderWindow &window)
     while (const std::optional event = window.pollEvent())
     {
         if (event->is<sf::Event::Closed>())
+        {
             window.close();
+        }
+        else if (const auto *key = event->getIf<sf::Event::KeyPressed>())
+        {
+            if (key->code == sf::Keyboard::Key::Space && !start)
+            {
+                start = true;
+                dy = -5;
+                float value = rand() % 2;
+                if (value == 0)
+                {
+                    dx = 3.f;
+                }
+                else
+                {
+                    dx = -3.f;
+                }
+            }
+        }
     }
 }
 
@@ -101,6 +194,8 @@ void handleInput(sf::RenderWindow &window)
 
 void updateGame()
 {
+    KeyboardInputFP();
+    moveBall();
 }
 
 // Score Text
@@ -153,7 +248,7 @@ void drawPaddle(sf::RenderWindow &window)
 {
     sf::RectangleShape padddle({PADDLE_W, PADDLE_H});
     padddle.setFillColor(sf::Color::Green);
-    padddle.setPosition({250, 650});
+    padddle.setPosition({paddleX, paddleY});
     window.draw(padddle);
 }
 
@@ -161,9 +256,10 @@ void drawPaddle(sf::RenderWindow &window)
 
 void drawBall(sf::RenderWindow &window)
 {
-    sf::CircleShape ball({BALL_SIZE});
+    sf::CircleShape ball({BALL_SIZE / 2});
     ball.setFillColor(sf::Color::White);
-    ball.setPosition({300, 350});
+    ball.setPosition({ballX, ballY});
+
     window.draw(ball);
 }
 
@@ -182,7 +278,8 @@ void drawGame(sf::RenderWindow &window, const sf::Font &font)
 // Main Body
 int main()
 {
-
+    // For seeding the time to random function;
+    srand(time(0));
     // Window Creation
     sf::RenderWindow window(sf::VideoMode({WINDOW_W, WINDOW_H}), "Block Buster");
     window.setFramerateLimit(60);
