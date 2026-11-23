@@ -85,9 +85,6 @@ void bounceOnPaddle()
             dx = 6;
         }
     }
-
-    //     part nikalo, clamp karo
-    //     dx choose karo
 }
 
 // Writing getting the values in 2D Array
@@ -149,11 +146,13 @@ bool loadResources(sf::Font &font)
 void KeyboardInputFP()
 {
 
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left))
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left) ||
+        sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A))
     {
         paddleX = paddleX - paddleS;
     }
-    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right))
+    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right) ||
+             sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D))
     {
         paddleX = paddleX + paddleS;
     }
@@ -245,14 +244,40 @@ void updateGame()
     bounceOnPaddle();
 }
 
-// Score Text
+// Score Text and Lives
 
 void drawHUD(sf::RenderWindow &window, const sf::Font &font)
 {
+    // HUD background strip
+    sf::RectangleShape strip({(float)WINDOW_W, (float)HUD_H});
+    strip.setFillColor(sf::Color(25, 25, 55));
+    window.draw(strip);
+
     sf::Text scoreText(font, "Score: " + std::to_string(score), 24);
     scoreText.setPosition({10.f, 10.f});
     scoreText.setFillColor(sf::Color::White);
     window.draw(scoreText);
+
+    // One small circle for every life left
+    sf::CircleShape lifeDot(8.f);
+    lifeDot.setFillColor(sf::Color::White);
+    for (int i = 0; i < lives; i++)
+    {
+        lifeDot.setPosition({WINDOW_W - 30.f - i * 25.f, 17.f});
+        window.draw(lifeDot);
+    }
+}
+
+// Drawing a text in the middle of the window (for menu, win, game over later)
+
+void drawCenteredText(sf::RenderWindow &window, const sf::Font &font,
+                      const std::string &str, int size, float y)
+{
+    sf::Text text(font, str, size);
+    sf::FloatRect box = text.getLocalBounds();
+    text.setOrigin({box.size.x / 2.f, 0.f});
+    text.setPosition({WINDOW_W / 2.f, y});
+    window.draw(text);
 }
 
 // Drawing the bricks
@@ -293,10 +318,10 @@ void drawBricks(sf::RenderWindow &window)
 
 void drawPaddle(sf::RenderWindow &window)
 {
-    sf::RectangleShape padddle({PADDLE_W, PADDLE_H});
-    padddle.setFillColor(sf::Color::Green);
-    padddle.setPosition({paddleX, paddleY});
-    window.draw(padddle);
+    sf::RectangleShape paddle({PADDLE_W, PADDLE_H});
+    paddle.setFillColor(sf::Color::Cyan);
+    paddle.setPosition({paddleX, paddleY});
+    window.draw(paddle);
 }
 
 // Drawing the Ball
