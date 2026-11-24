@@ -142,7 +142,7 @@ bool loadResources(sf::Font &font)
 }
 
 // Keyboard Inputs for paddle
-
+// Changed the values of KeyBoardInputFP
 void KeyboardInputFP()
 {
 
@@ -266,18 +266,6 @@ void drawHUD(sf::RenderWindow &window, const sf::Font &font)
         lifeDot.setPosition({WINDOW_W - 30.f - i * 25.f, 17.f});
         window.draw(lifeDot);
     }
-}
-
-// Drawing a text in the middle of the window (for menu, win, game over later)
-
-void drawCenteredText(sf::RenderWindow &window, const sf::Font &font,
-                      const std::string &str, int size, float y)
-{
-    sf::Text text(font, str, size);
-    sf::FloatRect box = text.getLocalBounds();
-    text.setOrigin({box.size.x / 2.f, 0.f});
-    text.setPosition({WINDOW_W / 2.f, y});
-    window.draw(text);
 }
 
 // Drawing the bricks
