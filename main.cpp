@@ -6,7 +6,9 @@
 #include <cstdlib>
 #include <ctime>
 
+// ============================================================
 // Constants
+// ============================================================
 
 // Window
 const int WINDOW_W = 600;
@@ -20,46 +22,54 @@ const int BRICK_W = 60;
 const int BRICK_H = 25;
 const int BRICKS_Y = 100;
 const float GAP = 2.f;
+
 // Paddle
 const int PADDLE_W = 100;
 const int PADDLE_H = 14;
+const float PADDLE_Y = 650.f;
+const float PADDLE_START_X = 250.f;
+const float PADDLE_SPEED = 8.f;
 
 // Ball
 const int BALL_SIZE = 12;
+const float BALL_SPEED_Y = 5.f;
+const float BALL_DX_SLOW = 3.f;
+const float BALL_DX_FAST = 6.f;
 
-// ADDED: Keys that are pressed once (menu and game states will use these)
+// Keys that are pressed once (menu and game states will use these)
 const int KEY_NONE = 0;
 const int KEY_UP = 1;
 const int KEY_DOWN = 2;
 const int KEY_ENTER = 3;
 const int KEY_ESC = 4;
 
-// Creating the Variables
+// ============================================================
+// Variables
+// ============================================================
 
 int bricks[ROWS][COLS];
 int lives = 3;
 int score = 0;
 
-// ADDED: The key pressed in this frame, set inside the event loop
+// The key pressed in this frame, set inside the event loop
 int pressedKey = KEY_NONE;
 
-// VELOCITIES AND POSITION
+// Positions and velocities
+float paddleX = PADDLE_START_X;
 
-float paddleX = 250.f;
-float paddleY = 650.f;
-float const paddleS = 8.f;
-
-float ballX = paddleX + 44.f;
-float ballY = 638.f;
+float ballX = PADDLE_START_X + (PADDLE_W - BALL_SIZE) / 2;
+float ballY = PADDLE_Y - BALL_SIZE;
 float dx = 0.f;
 float dy = 0.f;
 bool start = false;
 
-// Ball and Paddle Collision
+// ============================================================
+// Ball and paddle collision
+// ============================================================
 
 void bounceOnPaddle()
 {
-    // check: 4 comparisons + dy > 0
+    // 4 comparisons + dy > 0
     int leftB = ballX;
     int rightB = ballX + BALL_SIZE;
     int bottomB = ballY + BALL_SIZE;
@@ -67,44 +77,45 @@ void bounceOnPaddle()
 
     int leftP = paddleX;
     int rightP = paddleX + PADDLE_W;
-    int bottomP = paddleY + PADDLE_H;
-    int topP = paddleY;
+    int bottomP = PADDLE_Y + PADDLE_H;
+    int topP = PADDLE_Y;
 
     if (dy > 0 && leftB < rightP && rightB > leftP && bottomB > topP && topB < bottomP)
     {
+        dy = -BALL_SPEED_Y;
+        ballY = PADDLE_Y - BALL_SIZE;
 
-        // Getting the part
-        dy = -5;
-        ballY = paddleY - BALL_SIZE;
-        int part = (ballX + 6 - paddleX) * 4 / PADDLE_W;
-        std::cout << "part: " << part << "\n";
+        // Which quarter of the paddle was hit (0 to 3)
+        int part = (ballX + BALL_SIZE / 2 - paddleX) * 4 / PADDLE_W;
+
         if (part <= 0)
         {
-            dx = -6;
+            dx = -BALL_DX_FAST;
         }
         else if (part == 1)
         {
-            dx = -3;
+            dx = -BALL_DX_SLOW;
         }
         else if (part == 2)
         {
-            dx = 3;
+            dx = BALL_DX_SLOW;
         }
         else
         {
-            dx = 6;
+            dx = BALL_DX_FAST;
         }
     }
 }
 
-// Writing getting the values in 2D Array
+// ============================================================
+// Loading the level and resources
+// ============================================================
 
 bool loadLevel(int arr[][COLS])
 {
     std::ifstream fin("level.txt");
 
     // Checking the file
-
     if (!fin)
     {
         std::cout << "File Not Found\n";
@@ -112,7 +123,6 @@ bool loadLevel(int arr[][COLS])
     }
 
     // Checking the rows and cols
-
     int fileRows, fileCols;
     fin >> fileRows >> fileCols;
 
@@ -122,8 +132,7 @@ bool loadLevel(int arr[][COLS])
         return false;
     }
 
-    // Inputting 2D array
-
+    // Reading the 2D array
     for (int r = 0; r < ROWS; r++)
     {
         for (int c = 0; c < COLS; c++)
@@ -133,8 +142,6 @@ bool loadLevel(int arr[][COLS])
     }
     return true;
 }
-
-// Setting up Level and Font
 
 bool loadResources(sf::Font &font)
 {
@@ -151,22 +158,24 @@ bool loadResources(sf::Font &font)
     return true;
 }
 
-// Keyboard Inputs for paddle
-// Changed the values of KeyBoardInputFP
-void KeyboardInputFP()
-{
+// ============================================================
+// Paddle and ball movement
+// ============================================================
 
+void movePaddle()
+{
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left) ||
         sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A))
     {
-        paddleX = paddleX - paddleS;
+        paddleX = paddleX - PADDLE_SPEED;
     }
     else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right) ||
              sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D))
     {
-        paddleX = paddleX + paddleS;
+        paddleX = paddleX + PADDLE_SPEED;
     }
 
+    // Keeping the paddle inside the window
     if (paddleX < 0)
     {
         paddleX = 0;
@@ -176,14 +185,14 @@ void KeyboardInputFP()
     {
         paddleX = WINDOW_W - PADDLE_W;
     }
+
+    // Before launch the ball sits in the middle of the paddle
     if (!start)
     {
         ballX = paddleX + (PADDLE_W - BALL_SIZE) / 2;
-        ballY = 638.f;
+        ballY = PADDLE_Y - BALL_SIZE;
     }
 }
-
-// Starting the Velocity of the ball
 
 void moveBall()
 {
@@ -192,10 +201,8 @@ void moveBall()
         return;
     }
 
-    if (start)
-    {
-        ballX = ballX + dx;
-    }
+    // x step, undo on wall
+    ballX = ballX + dx;
 
     if (ballX < 0 || ballX > WINDOW_W - BALL_SIZE)
     {
@@ -203,10 +210,8 @@ void moveBall()
         dx = -dx;
     }
 
-    if (start)
-    {
-        ballY = ballY + dy;
-    }
+    // y step, undo on top wall
+    ballY = ballY + dy;
 
     if (ballY < HUD_H)
     {
@@ -214,12 +219,14 @@ void moveBall()
         dy = -dy;
     }
 }
-// Reviewed All the code and Accepted it
-// Input Function
+
+// ============================================================
+// Input
+// ============================================================
 
 void handleInput(sf::RenderWindow &window)
 {
-    // ADDED: No key pressed unless the event loop finds one
+    // No key pressed unless the event loop finds one
     pressedKey = KEY_NONE;
 
     while (const std::optional event = window.pollEvent())
@@ -230,7 +237,7 @@ void handleInput(sf::RenderWindow &window)
         }
         else if (const auto *key = event->getIf<sf::Event::KeyPressed>())
         {
-            // ADDED: Saving the once-per-press keys in our own variable
+            // Saving the once-per-press keys in our own variable
             if (key->code == sf::Keyboard::Key::Up)
             {
                 pressedKey = KEY_UP;
@@ -248,35 +255,42 @@ void handleInput(sf::RenderWindow &window)
                 pressedKey = KEY_ESC;
             }
 
+            // Launch the ball
             if (key->code == sf::Keyboard::Key::Space && !start)
             {
                 start = true;
-                dy = -5;
-                float value = rand() % 2;
-                if (value == 0)
+                dy = -BALL_SPEED_Y;
+
+                int side = rand() % 2;
+                if (side == 0)
                 {
-                    dx = 3.f;
+                    dx = BALL_DX_SLOW;
                 }
                 else
                 {
-                    dx = -3.f;
+                    dx = -BALL_DX_SLOW;
                 }
             }
         }
     }
 }
 
-// Update Function
+// ============================================================
+// Update
+// ============================================================
 
 void updateGame()
 {
-    KeyboardInputFP();
+    movePaddle();
     moveBall();
     bounceOnPaddle();
 }
 
-// ADDED: Drawing a text in the middle of the window
+// ============================================================
+// Drawing
+// ============================================================
 
+// Drawing a text in the middle of the window
 void drawCenteredText(sf::RenderWindow &window, const sf::Font &font,
                       const std::string &str, int size, float y,
                       sf::Color color = sf::Color::White)
@@ -291,8 +305,7 @@ void drawCenteredText(sf::RenderWindow &window, const sf::Font &font,
     window.draw(text);
 }
 
-// ADDED: Playfield side lines and the line under the HUD
-
+// Playfield side lines
 void drawBackground(sf::RenderWindow &window)
 {
     sf::RectangleShape line({2.f, (float)(WINDOW_H - HUD_H)});
@@ -304,8 +317,7 @@ void drawBackground(sf::RenderWindow &window)
     window.draw(line);
 }
 
-// Score Text and Lives
-
+// Score text and lives
 void drawHUD(sf::RenderWindow &window, const sf::Font &font)
 {
     // HUD background strip
@@ -313,7 +325,7 @@ void drawHUD(sf::RenderWindow &window, const sf::Font &font)
     strip.setFillColor(sf::Color(25, 25, 55));
     window.draw(strip);
 
-    // ADDED: Line between the HUD and the playfield
+    // Line between the HUD and the playfield
     sf::RectangleShape border({(float)WINDOW_W, 2.f});
     border.setFillColor(sf::Color(110, 110, 200));
     border.setPosition({0.f, HUD_H - 2.f});
@@ -324,7 +336,7 @@ void drawHUD(sf::RenderWindow &window, const sf::Font &font)
     scoreText.setFillColor(sf::Color::White);
     window.draw(scoreText);
 
-    // ADDED: Small label before the life circles
+    // Small label before the life circles
     sf::Text livesText(font, "Lives", 18);
     livesText.setPosition({WINDOW_W - 160.f, 15.f});
     livesText.setFillColor(sf::Color(170, 170, 210));
@@ -340,12 +352,9 @@ void drawHUD(sf::RenderWindow &window, const sf::Font &font)
     }
 }
 
-// Drawing the bricks
-
 void drawBricks(sf::RenderWindow &window)
 {
     // Colour for each number in the bricks array (0 = no brick)
-    // ADDED: softer colours than the plain ones
     sf::Color colors[4] = {sf::Color(25, 25, 45),
                            sf::Color(60, 220, 150),
                            sf::Color(255, 210, 60),
@@ -354,7 +363,7 @@ void drawBricks(sf::RenderWindow &window)
     // One shape only, smaller than the box so a gap shows
     sf::RectangleShape brick({BRICK_W - GAP, BRICK_H - GAP});
 
-    // ADDED: Thin light outline on every brick
+    // Thin light outline on every brick
     brick.setOutlineThickness(1.f);
     brick.setOutlineColor(sf::Color(255, 255, 255, 120));
 
@@ -379,34 +388,63 @@ void drawBricks(sf::RenderWindow &window)
     }
 }
 
-// Drawing the paddle
-
 void drawPaddle(sf::RenderWindow &window)
 {
-    sf::RectangleShape paddle({PADDLE_W, PADDLE_H});
+    sf::RectangleShape paddle({(float)PADDLE_W, (float)PADDLE_H});
     paddle.setFillColor(sf::Color(60, 220, 255));
-    // ADDED: Outline for the paddle
     paddle.setOutlineThickness(1.f);
     paddle.setOutlineColor(sf::Color::White);
-    paddle.setPosition({paddleX, paddleY});
+    paddle.setPosition({paddleX, PADDLE_Y});
     window.draw(paddle);
 }
-
-// Drawing the Ball
 
 void drawBall(sf::RenderWindow &window)
 {
     sf::CircleShape ball(BALL_SIZE / 2.f);
     ball.setFillColor(sf::Color::White);
     ball.setPosition({ballX, ballY});
-
     window.draw(ball);
 }
 
-// ADDED: Drawing the main menu (only draws, the choice logic is ours)
+// NEW: small hint under the paddle area while the ball is waiting
+// Only draws. When to show it (ball not launched) is decided by the caller.
+void drawLaunchHint(sf::RenderWindow &window, const sf::Font &font)
+{
+    drawCenteredText(window, font, "Press SPACE to launch", 18, 675.f,
+                     sf::Color(170, 170, 210));
+}
+
+// NEW: draws one falling power-up capsule at (x, y), size 24 x 24
+// type: 'W' = wide paddle (blue), '+' = extra life (green)
+// Only draws. Falling, catching and effects are game logic.
+void drawPowerUp(sf::RenderWindow &window, const sf::Font &font,
+                 float x, float y, char type)
+{
+    sf::RectangleShape box({24.f, 24.f});
+    if (type == 'W')
+    {
+        box.setFillColor(sf::Color(60, 140, 255));
+    }
+    else
+    {
+        box.setFillColor(sf::Color(60, 220, 150));
+    }
+    box.setOutlineThickness(1.f);
+    box.setOutlineColor(sf::Color::White);
+    box.setPosition({x, y});
+    window.draw(box);
+
+    sf::Text letter(font, std::string(1, type), 18);
+    letter.setFillColor(sf::Color::White);
+    sf::FloatRect b = letter.getLocalBounds();
+    letter.setOrigin({b.position.x + b.size.x / 2.f, b.position.y + b.size.y / 2.f});
+    letter.setPosition({x + 12.f, y + 12.f});
+    window.draw(letter);
+}
+
+// Main menu (only draws, the choice logic is ours)
 // selected: 0 = New Game, 1 = Continue, 2 = Exit
 // showNoSave: true shows the "No saved game" message
-
 void drawMenu(sf::RenderWindow &window, const sf::Font &font,
               int selected, bool showNoSave)
 {
@@ -438,9 +476,8 @@ void drawMenu(sf::RenderWindow &window, const sf::Font &font,
                      sf::Color(170, 170, 210));
 }
 
-// ADDED: Drawing the game over / you win screen (only draws)
+// Game over / you win screen (only draws)
 // message: "GAME OVER" or "YOU WIN"
-
 void drawEndScreen(sf::RenderWindow &window, const sf::Font &font,
                    const std::string &message, int finalScore)
 {
@@ -460,8 +497,6 @@ void drawEndScreen(sf::RenderWindow &window, const sf::Font &font,
     drawCenteredText(window, font, "Press Enter", 24, 400.f, sf::Color(255, 210, 60));
 }
 
-// Draw Function
-
 void drawGame(sf::RenderWindow &window, const sf::Font &font)
 {
     window.clear(sf::Color(15, 15, 35));
@@ -473,16 +508,23 @@ void drawGame(sf::RenderWindow &window, const sf::Font &font)
     window.display();
 }
 
-// Main Body
+// ============================================================
+// Main
+// ============================================================
+
 int main()
 {
-    // For seeding the time to random function;
+    // Seeding the random function
     srand(time(0));
-    // Window Creation
+
+    // Window creation
     sf::RenderWindow window(sf::VideoMode({WINDOW_W, WINDOW_H}), "Block Buster");
     window.setFramerateLimit(60);
 
-    // Setting up Level and Font
+    // NEW: one KeyPressed event per press, so menu moves one step at a time
+    window.setKeyRepeatEnabled(false);
+
+    // Setting up level and font
     sf::Font font;
 
     if (!loadResources(font))
@@ -490,8 +532,7 @@ int main()
         return -1;
     }
 
-    // Loop for the game
-
+    // Game loop
     while (window.isOpen())
     {
         handleInput(window);
