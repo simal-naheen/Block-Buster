@@ -159,68 +159,6 @@ bool loadResources(sf::Font &font)
 }
 
 // ============================================================
-// Paddle and ball movement
-// ============================================================
-
-void movePaddle()
-{
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left) ||
-        sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A))
-    {
-        paddleX = paddleX - PADDLE_SPEED;
-    }
-    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right) ||
-             sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D))
-    {
-        paddleX = paddleX + PADDLE_SPEED;
-    }
-
-    // Keeping the paddle inside the window
-    if (paddleX < 0)
-    {
-        paddleX = 0;
-    }
-
-    if (paddleX > WINDOW_W - PADDLE_W)
-    {
-        paddleX = WINDOW_W - PADDLE_W;
-    }
-
-    // Before launch the ball sits in the middle of the paddle
-    if (!start)
-    {
-        ballX = paddleX + (PADDLE_W - BALL_SIZE) / 2;
-        ballY = PADDLE_Y - BALL_SIZE;
-    }
-}
-
-void moveBall()
-{
-    if (!start)
-    {
-        return;
-    }
-
-    // x step, undo on wall
-    ballX = ballX + dx;
-
-    if (ballX < 0 || ballX > WINDOW_W - BALL_SIZE)
-    {
-        ballX = ballX - dx;
-        dx = -dx;
-    }
-
-    // y step, undo on top wall
-    ballY = ballY + dy;
-
-    if (ballY < HUD_H)
-    {
-        ballY = ballY - dy;
-        dy = -dy;
-    }
-}
-
-// ============================================================
 // Input
 // ============================================================
 
@@ -274,6 +212,158 @@ void handleInput(sf::RenderWindow &window)
         }
     }
 }
+// ============================================================
+// Starting with ball and Bricks collision
+// ============================================================
+
+bool cornerHitsBrick(float cx, float cy, int &r, int &c)
+{
+
+    if (cx < 0 || cx >= COLS * BRICK_W ||
+        cy < BRICKS_Y || cy >= BRICKS_Y + ROWS * BRICK_H)
+    {
+        return false;
+    }
+
+    r = (cy - BRICKS_Y) / BRICK_H;
+    c = cx / BRICK_W;
+
+    if (bricks[r][c] > 0)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+// ============================================================
+// Find Brick Hit
+// ============================================================
+
+bool findBrickHit(int &r, int &c)
+{
+    int leftB = ballX;
+    int rightB = ballX + BALL_SIZE - 1;
+    int bottomB = ballY + BALL_SIZE - 1;
+    int topB = ballY;
+
+    if (cornerHitsBrick(leftB, topB, r, c))
+    {
+        return true;
+    }
+    if (cornerHitsBrick(rightB, topB, r, c))
+    {
+        return true;
+    }
+    if (cornerHitsBrick(leftB, bottomB, r, c))
+    {
+        return true;
+    }
+    if (cornerHitsBrick(rightB, bottomB, r, c))
+    {
+        return true;
+    }
+    return false;
+}
+
+// ============================================================
+// Paddle and ball movement
+// ============================================================
+
+void movePaddle()
+{
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left) ||
+        sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A))
+    {
+        paddleX = paddleX - PADDLE_SPEED;
+    }
+    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right) ||
+             sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D))
+    {
+        paddleX = paddleX + PADDLE_SPEED;
+    }
+
+    // Keeping the paddle inside the window
+    if (paddleX < 0)
+    {
+        paddleX = 0;
+    }
+
+    if (paddleX > WINDOW_W - PADDLE_W)
+    {
+        paddleX = WINDOW_W - PADDLE_W;
+    }
+
+    // Before launch the ball sits in the middle of the paddle
+    if (!start)
+    {
+        ballX = paddleX + (PADDLE_W - BALL_SIZE) / 2;
+        ballY = PADDLE_Y - BALL_SIZE;
+    }
+}
+
+// ============================================================
+// Hit Brick will subtract the value of r and c in bricks
+// ============================================================
+
+void hitBrick(int r, int c)
+{
+
+    bricks[r][c]--;
+
+    if (bricks[r][c] == 0)
+    {
+        score += 50;
+    }
+    else
+    {
+        score += 10;
+    }
+}
+
+// ============================================================
+// Move Ball
+// ============================================================
+
+void moveBall()
+{
+    int r = 0;
+    int c = 0;
+    if (!start)
+    {
+        return;
+    }
+
+    ballX = ballX + dx;
+
+    if (ballX < 0 || ballX > WINDOW_W - BALL_SIZE)
+    {
+        ballX = ballX - dx;
+        dx = -dx;
+    }
+    else if (findBrickHit(r, c))
+    {
+        hitBrick(r, c);
+        ballX = ballX - dx;
+        dx = -dx;
+    }
+
+    ballY = ballY + dy;
+
+    if (ballY < HUD_H)
+    {
+        ballY = ballY - dy;
+        dy = -dy;
+    }
+    else if (findBrickHit(r, c))
+    {
+        hitBrick(r, c);
+        ballY = ballY - dy;
+        dy = -dy;
+    }
+}
 
 // ============================================================
 // Update
@@ -281,12 +371,13 @@ void handleInput(sf::RenderWindow &window)
 
 void updateGame()
 {
+
     movePaddle();
     moveBall();
     bounceOnPaddle();
 }
 
-// ============================================================
+// ==================================0==========================
 // Drawing
 // ============================================================
 
@@ -505,6 +596,7 @@ void drawGame(sf::RenderWindow &window, const sf::Font &font)
     drawHUD(window, font);
     drawPaddle(window);
     drawBall(window);
+
     window.display();
 }
 
