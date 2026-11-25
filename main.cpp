@@ -214,7 +214,7 @@ void moveBall()
         dy = -dy;
     }
 }
-
+// Reviewed All the code and Accepted it
 // Input Function
 
 void handleInput(sf::RenderWindow &window)
