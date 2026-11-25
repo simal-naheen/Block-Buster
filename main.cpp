@@ -27,11 +27,21 @@ const int PADDLE_H = 14;
 // Ball
 const int BALL_SIZE = 12;
 
+// ADDED: Keys that are pressed once (menu and game states will use these)
+const int KEY_NONE = 0;
+const int KEY_UP = 1;
+const int KEY_DOWN = 2;
+const int KEY_ENTER = 3;
+const int KEY_ESC = 4;
+
 // Creating the Variables
 
 int bricks[ROWS][COLS];
 int lives = 3;
 int score = 0;
+
+// ADDED: The key pressed in this frame, set inside the event loop
+int pressedKey = KEY_NONE;
 
 // VELOCITIES AND POSITION
 
@@ -209,6 +219,9 @@ void moveBall()
 
 void handleInput(sf::RenderWindow &window)
 {
+    // ADDED: No key pressed unless the event loop finds one
+    pressedKey = KEY_NONE;
+
     while (const std::optional event = window.pollEvent())
     {
         if (event->is<sf::Event::Closed>())
@@ -217,6 +230,24 @@ void handleInput(sf::RenderWindow &window)
         }
         else if (const auto *key = event->getIf<sf::Event::KeyPressed>())
         {
+            // ADDED: Saving the once-per-press keys in our own variable
+            if (key->code == sf::Keyboard::Key::Up)
+            {
+                pressedKey = KEY_UP;
+            }
+            else if (key->code == sf::Keyboard::Key::Down)
+            {
+                pressedKey = KEY_DOWN;
+            }
+            else if (key->code == sf::Keyboard::Key::Enter)
+            {
+                pressedKey = KEY_ENTER;
+            }
+            else if (key->code == sf::Keyboard::Key::Escape)
+            {
+                pressedKey = KEY_ESC;
+            }
+
             if (key->code == sf::Keyboard::Key::Space && !start)
             {
                 start = true;
@@ -244,6 +275,35 @@ void updateGame()
     bounceOnPaddle();
 }
 
+// ADDED: Drawing a text in the middle of the window
+
+void drawCenteredText(sf::RenderWindow &window, const sf::Font &font,
+                      const std::string &str, int size, float y,
+                      sf::Color color = sf::Color::White)
+{
+    sf::Text text(font, str, size);
+    text.setFillColor(color);
+
+    // Moving the origin to the middle of the text so it sits in the centre
+    sf::FloatRect box = text.getLocalBounds();
+    text.setOrigin({box.position.x + box.size.x / 2.f, 0.f});
+    text.setPosition({WINDOW_W / 2.f, y});
+    window.draw(text);
+}
+
+// ADDED: Playfield side lines and the line under the HUD
+
+void drawBackground(sf::RenderWindow &window)
+{
+    sf::RectangleShape line({2.f, (float)(WINDOW_H - HUD_H)});
+    line.setFillColor(sf::Color(50, 50, 100));
+
+    line.setPosition({0.f, (float)HUD_H});
+    window.draw(line);
+    line.setPosition({WINDOW_W - 2.f, (float)HUD_H});
+    window.draw(line);
+}
+
 // Score Text and Lives
 
 void drawHUD(sf::RenderWindow &window, const sf::Font &font)
@@ -253,14 +313,26 @@ void drawHUD(sf::RenderWindow &window, const sf::Font &font)
     strip.setFillColor(sf::Color(25, 25, 55));
     window.draw(strip);
 
+    // ADDED: Line between the HUD and the playfield
+    sf::RectangleShape border({(float)WINDOW_W, 2.f});
+    border.setFillColor(sf::Color(110, 110, 200));
+    border.setPosition({0.f, HUD_H - 2.f});
+    window.draw(border);
+
     sf::Text scoreText(font, "Score: " + std::to_string(score), 24);
     scoreText.setPosition({10.f, 10.f});
     scoreText.setFillColor(sf::Color::White);
     window.draw(scoreText);
 
+    // ADDED: Small label before the life circles
+    sf::Text livesText(font, "Lives", 18);
+    livesText.setPosition({WINDOW_W - 160.f, 15.f});
+    livesText.setFillColor(sf::Color(170, 170, 210));
+    window.draw(livesText);
+
     // One small circle for every life left
     sf::CircleShape lifeDot(8.f);
-    lifeDot.setFillColor(sf::Color::White);
+    lifeDot.setFillColor(sf::Color(255, 90, 110));
     for (int i = 0; i < lives; i++)
     {
         lifeDot.setPosition({WINDOW_W - 30.f - i * 25.f, 17.f});
@@ -273,13 +345,18 @@ void drawHUD(sf::RenderWindow &window, const sf::Font &font)
 void drawBricks(sf::RenderWindow &window)
 {
     // Colour for each number in the bricks array (0 = no brick)
+    // ADDED: softer colours than the plain ones
     sf::Color colors[4] = {sf::Color(25, 25, 45),
-                           sf::Color::Green,
-                           sf::Color::Yellow,
-                           sf::Color::Red};
+                           sf::Color(60, 220, 150),
+                           sf::Color(255, 210, 60),
+                           sf::Color(255, 75, 105)};
 
     // One shape only, smaller than the box so a gap shows
     sf::RectangleShape brick({BRICK_W - GAP, BRICK_H - GAP});
+
+    // ADDED: Thin light outline on every brick
+    brick.setOutlineThickness(1.f);
+    brick.setOutlineColor(sf::Color(255, 255, 255, 120));
 
     for (int r = 0; r < ROWS; r++)
     {
@@ -307,7 +384,10 @@ void drawBricks(sf::RenderWindow &window)
 void drawPaddle(sf::RenderWindow &window)
 {
     sf::RectangleShape paddle({PADDLE_W, PADDLE_H});
-    paddle.setFillColor(sf::Color::Cyan);
+    paddle.setFillColor(sf::Color(60, 220, 255));
+    // ADDED: Outline for the paddle
+    paddle.setOutlineThickness(1.f);
+    paddle.setOutlineColor(sf::Color::White);
     paddle.setPosition({paddleX, paddleY});
     window.draw(paddle);
 }
@@ -316,11 +396,68 @@ void drawPaddle(sf::RenderWindow &window)
 
 void drawBall(sf::RenderWindow &window)
 {
-    sf::CircleShape ball({BALL_SIZE / 2});
+    sf::CircleShape ball(BALL_SIZE / 2.f);
     ball.setFillColor(sf::Color::White);
     ball.setPosition({ballX, ballY});
 
     window.draw(ball);
+}
+
+// ADDED: Drawing the main menu (only draws, the choice logic is ours)
+// selected: 0 = New Game, 1 = Continue, 2 = Exit
+// showNoSave: true shows the "No saved game" message
+
+void drawMenu(sf::RenderWindow &window, const sf::Font &font,
+              int selected, bool showNoSave)
+{
+    drawCenteredText(window, font, "BLOCK BUSTER", 56, 150.f, sf::Color(60, 220, 255));
+
+    std::string options[3] = {"New Game", "Continue", "Exit"};
+
+    for (int i = 0; i < 3; i++)
+    {
+        // The selected option is yellow with an arrow, the others are white
+        if (i == selected)
+        {
+            drawCenteredText(window, font, "> " + options[i] + " <", 32,
+                             280.f + i * 60.f, sf::Color(255, 210, 60));
+        }
+        else
+        {
+            drawCenteredText(window, font, options[i], 32,
+                             280.f + i * 60.f, sf::Color::White);
+        }
+    }
+
+    if (showNoSave)
+    {
+        drawCenteredText(window, font, "No saved game", 24, 500.f, sf::Color(255, 75, 105));
+    }
+
+    drawCenteredText(window, font, "Up / Down to move, Enter to choose", 18, 640.f,
+                     sf::Color(170, 170, 210));
+}
+
+// ADDED: Drawing the game over / you win screen (only draws)
+// message: "GAME OVER" or "YOU WIN"
+
+void drawEndScreen(sf::RenderWindow &window, const sf::Font &font,
+                   const std::string &message, int finalScore)
+{
+    // Dark layer over the screen
+    sf::RectangleShape shade({(float)WINDOW_W, (float)WINDOW_H});
+    shade.setFillColor(sf::Color(0, 0, 0, 170));
+    window.draw(shade);
+
+    sf::Color messageColor = sf::Color(255, 75, 105);
+    if (message == "YOU WIN")
+    {
+        messageColor = sf::Color(60, 220, 150);
+    }
+
+    drawCenteredText(window, font, message, 64, 220.f, messageColor);
+    drawCenteredText(window, font, "Final Score: " + std::to_string(finalScore), 32, 320.f);
+    drawCenteredText(window, font, "Press Enter", 24, 400.f, sf::Color(255, 210, 60));
 }
 
 // Draw Function
@@ -328,6 +465,7 @@ void drawBall(sf::RenderWindow &window)
 void drawGame(sf::RenderWindow &window, const sf::Font &font)
 {
     window.clear(sf::Color(15, 15, 35));
+    drawBackground(window);
     drawBricks(window);
     drawHUD(window, font);
     drawPaddle(window);
