@@ -22,7 +22,7 @@ const int BRICK_W = 60;
 const int BRICK_H = 25;
 const int BRICKS_Y = 100;
 const float GAP = 2.f;
-
+// Paddle Constant
 // Paddle
 const int PADDLE_W = 100;
 const int PADDLE_H = 14;
