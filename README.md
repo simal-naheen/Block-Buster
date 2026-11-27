@@ -25,7 +25,7 @@ leads the explanation of each feature in the demo.
 | 2. Bricks from a text file | Simal Naheen |
 | 3. Paddle and launching the ball | Simal Naheen |
 | 6. Lives, score and HUD | Simal Naheen |
-| 7. Menu and game states | Simal Naheen |
+| 7. Menu and game states | Muhammad Aazmeer |
 | 4. Ball movement and bouncing | Muhammad Aazmeer |
 | 5. Breaking bricks (corner collision) | Muhammad Aazmeer |
 | 8. Save and continue | Muhammad Aazmeer |
