@@ -407,6 +407,84 @@ bool allBricksGone()
 }
 
 // ============================================================
+// Save and continue
+// ============================================================
+
+// Line 1: score lives, then the 8 rows of bricks
+void saveGame()
+{
+    std::ofstream fout("savegame.txt");
+
+    fout << score << " " << lives << "\n";
+
+    for (int r = 0; r < ROWS; r++)
+    {
+        for (int c = 0; c < COLS; c++)
+        {
+            fout << bricks[r][c] << " ";
+        }
+        fout << "\n";
+    }
+}
+
+// Gives back false if there is no usable save
+bool loadGame()
+{
+    std::ifstream fin("savegame.txt");
+
+    int savedScore, savedLives;
+    int savedBricks[ROWS][COLS];
+
+    // Missing or empty file
+    if (!(fin >> savedScore >> savedLives))
+    {
+        return false;
+    }
+
+    for (int r = 0; r < ROWS; r++)
+    {
+        for (int c = 0; c < COLS; c++)
+        {
+            if (!(fin >> savedBricks[r][c]))
+            {
+                return false;
+            }
+        }
+    }
+
+    // A save with no lives is not a game in progress
+    if (savedLives <= 0)
+    {
+        return false;
+    }
+
+    // The file is fine, now the real variables change
+    score = savedScore;
+    lives = savedLives;
+
+    for (int r = 0; r < ROWS; r++)
+    {
+        for (int c = 0; c < COLS; c++)
+        {
+            bricks[r][c] = savedBricks[r][c];
+        }
+    }
+
+    paddleX = PADDLE_START_X;
+    start = false;
+    dx = 0.f;
+    dy = 0.f;
+    gameState = STATE_PLAYING;
+    return true;
+}
+
+// Opening the file for writing empties it
+void clearSave()
+{
+    std::ofstream fout("savegame.txt");
+}
+
+// ============================================================
 // Game states
 // ============================================================
 
@@ -424,6 +502,7 @@ void startNewGame()
 
 void endGame(const std::string &message)
 {
+    clearSave();
     endMessage = message;
     gameState = STATE_GAME_OVER;
 }
@@ -457,7 +536,10 @@ void menuInput(sf::RenderWindow &window)
         }
         else if (menuSelected == MENU_CONTINUE)
         {
-            showNoSave = true; // real Continue comes with save and load
+            if (!loadGame())
+            {
+                showNoSave = true;
+            }
         }
         else
         {
@@ -475,7 +557,12 @@ void handleStateInput(sf::RenderWindow &window)
     }
     else if (gameState == STATE_PLAYING)
     {
-        if (pressedKey == KEY_SPACE && !start)
+        if (pressedKey == KEY_ESC)
+        {
+            saveGame();
+            gameState = STATE_MENU;
+        }
+        else if (pressedKey == KEY_SPACE && !start)
         {
             launchBall();
         }
