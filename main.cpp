@@ -29,12 +29,28 @@ const int PADDLE_H = 14;
 const float PADDLE_Y = 650.f;
 const float PADDLE_START_X = 250.f;
 const float PADDLE_SPEED = 8.f;
+const int PADDLE_PARTS = 4; // the paddle is split in 4 parts for the bounce
 
 // Ball
 const int BALL_SIZE = 12;
 const float BALL_SPEED_Y = 5.f;
 const float BALL_DX_SLOW = 3.f;
 const float BALL_DX_FAST = 6.f;
+
+// Rules
+const int START_LIVES = 3;
+const int SCORE_HIT = 10;
+const int SCORE_BREAK = 50;
+
+// Power-ups (bonus)
+const int POWERUP_SIZE = 24;
+const float POWERUP_SPEED = 3.f;
+const int POWERUP_CHANCE = 5; // 1 in 5 broken bricks drops a power-up
+const int MAX_POWERUPS = 10;
+const char POWERUP_WIDE = 'W';
+const char POWERUP_LIFE = '+';
+const int WIDE_PADDLE_W = 150;
+const int WIDE_PADDLE_FRAMES = 600;
 
 // Keys that are pressed once (menu and game states use these)
 const int KEY_NONE = 0;
@@ -49,14 +65,16 @@ const int STATE_MENU = 0;
 const int STATE_PLAYING = 1;
 const int STATE_GAME_OVER = 2;
 
-// Menu options
+// Menu
 const int MENU_NEW_GAME = 0;
 const int MENU_CONTINUE = 1;
 const int MENU_EXIT = 2;
 const int MENU_COUNT = 3;
+const float MENU_FIRST_Y = 280.f;
+const float MENU_SPACING = 60.f;
 
-// Game rules
-const int START_LIVES = 3;
+// Text positions
+const float LAUNCH_HINT_Y = 675.f;
 
 // ============================================================
 // Variables
@@ -69,8 +87,10 @@ int score = 0;
 // The key pressed in this frame, set inside the event loop
 int pressedKey = KEY_NONE;
 
-// Positions and velocities
+// Paddle and ball
 float paddleX = PADDLE_START_X;
+int paddleW = PADDLE_W;
+int wideFramesLeft = 0;
 
 float ballX = PADDLE_START_X + (PADDLE_W - BALL_SIZE) / 2;
 float ballY = PADDLE_Y - BALL_SIZE;
@@ -78,55 +98,17 @@ float dx = 0.f;
 float dy = 0.f;
 bool start = false;
 
+// Falling power-ups (one slot per power-up)
+bool powerActive[MAX_POWERUPS];
+float powerX[MAX_POWERUPS];
+float powerY[MAX_POWERUPS];
+char powerType[MAX_POWERUPS];
+
 // Game state
 int gameState = STATE_MENU;
 int menuSelected = MENU_NEW_GAME;
 bool showNoSave = false;
 std::string endMessage = "";
-
-// ============================================================
-// Ball and paddle collision
-// ============================================================
-
-void bounceOnPaddle()
-{
-    // 4 comparisons + dy > 0
-    int leftB = ballX;
-    int rightB = ballX + BALL_SIZE;
-    int bottomB = ballY + BALL_SIZE;
-    int topB = ballY;
-
-    int leftP = paddleX;
-    int rightP = paddleX + PADDLE_W;
-    int bottomP = PADDLE_Y + PADDLE_H;
-    int topP = PADDLE_Y;
-
-    if (dy > 0 && leftB < rightP && rightB > leftP && bottomB > topP && topB < bottomP)
-    {
-        dy = -BALL_SPEED_Y;
-        ballY = PADDLE_Y - BALL_SIZE;
-
-        // Which quarter of the paddle was hit (0 to 3)
-        int part = (ballX + BALL_SIZE / 2 - paddleX) * 4 / PADDLE_W;
-
-        if (part <= 0)
-        {
-            dx = -BALL_DX_FAST;
-        }
-        else if (part == 1)
-        {
-            dx = -BALL_DX_SLOW;
-        }
-        else if (part == 2)
-        {
-            dx = BALL_DX_SLOW;
-        }
-        else
-        {
-            dx = BALL_DX_FAST;
-        }
-    }
-}
 
 // ============================================================
 // Loading the level and resources
@@ -183,6 +165,32 @@ bool loadResources(sf::Font &font)
 // Input
 // ============================================================
 
+// Turns an SFML key into one of our own key constants
+int toGameKey(sf::Keyboard::Key code)
+{
+    if (code == sf::Keyboard::Key::Up)
+    {
+        return KEY_UP;
+    }
+    if (code == sf::Keyboard::Key::Down)
+    {
+        return KEY_DOWN;
+    }
+    if (code == sf::Keyboard::Key::Enter)
+    {
+        return KEY_ENTER;
+    }
+    if (code == sf::Keyboard::Key::Escape)
+    {
+        return KEY_ESC;
+    }
+    if (code == sf::Keyboard::Key::Space)
+    {
+        return KEY_SPACE;
+    }
+    return KEY_NONE;
+}
+
 void handleInput(sf::RenderWindow &window)
 {
     // No key pressed unless the event loop finds one
@@ -196,27 +204,7 @@ void handleInput(sf::RenderWindow &window)
         }
         else if (const auto *key = event->getIf<sf::Event::KeyPressed>())
         {
-            // Saving the once-per-press keys in our own variable
-            if (key->code == sf::Keyboard::Key::Up)
-            {
-                pressedKey = KEY_UP;
-            }
-            else if (key->code == sf::Keyboard::Key::Down)
-            {
-                pressedKey = KEY_DOWN;
-            }
-            else if (key->code == sf::Keyboard::Key::Enter)
-            {
-                pressedKey = KEY_ENTER;
-            }
-            else if (key->code == sf::Keyboard::Key::Escape)
-            {
-                pressedKey = KEY_ESC;
-            }
-            else if (key->code == sf::Keyboard::Key::Space)
-            {
-                pressedKey = KEY_SPACE;
-            }
+            pressedKey = toGameKey(key->code);
         }
     }
 }
@@ -225,6 +213,7 @@ void handleInput(sf::RenderWindow &window)
 // Ball and bricks collision
 // ============================================================
 
+// Is there a brick under this point? Gives back its row and col
 bool cornerHitsBrick(float cx, float cy, int &r, int &c)
 {
     // Only the brick area counts
@@ -237,19 +226,13 @@ bool cornerHitsBrick(float cx, float cy, int &r, int &c)
     r = (cy - BRICKS_Y) / BRICK_H;
     c = cx / BRICK_W;
 
-    if (bricks[r][c] > 0)
-    {
-        return true;
-    }
-    else
-    {
-        return false;
-    }
+    return bricks[r][c] > 0;
 }
 
-// Checks the 4 corners, stops at the first brick found
+// Checks the 4 corners of the ball, stops at the first brick found
 bool findBrickHit(int &r, int &c)
 {
+    // The last pixel of the ball is at + BALL_SIZE - 1
     int leftB = ballX;
     int rightB = ballX + BALL_SIZE - 1;
     int bottomB = ballY + BALL_SIZE - 1;
@@ -274,18 +257,127 @@ bool findBrickHit(int &r, int &c)
     return false;
 }
 
-// One hit on a brick: take one hit off and add the score
+// ============================================================
+// Power-ups (bonus)
+// ============================================================
+
+// Removes all falling power-ups and the wide paddle effect
+void resetPowerUps()
+{
+    for (int i = 0; i < MAX_POWERUPS; i++)
+    {
+        powerActive[i] = false;
+    }
+    paddleW = PADDLE_W;
+    wideFramesLeft = 0;
+}
+
+// Drops a random power-up from the middle of the broken brick
+void spawnPowerUp(int r, int c)
+{
+    for (int i = 0; i < MAX_POWERUPS; i++)
+    {
+        if (!powerActive[i])
+        {
+            powerActive[i] = true;
+            powerX[i] = c * BRICK_W + (BRICK_W - POWERUP_SIZE) / 2;
+            powerY[i] = BRICKS_Y + r * BRICK_H;
+
+            if (rand() % 2 == 0)
+            {
+                powerType[i] = POWERUP_WIDE;
+            }
+            else
+            {
+                powerType[i] = POWERUP_LIFE;
+            }
+            return;
+        }
+    }
+}
+
+// The effect of a caught power-up
+void applyPowerUp(char type)
+{
+    if (type == POWERUP_WIDE)
+    {
+        paddleW = WIDE_PADDLE_W;
+        wideFramesLeft = WIDE_PADDLE_FRAMES;
+    }
+    else
+    {
+        lives++;
+    }
+}
+
+// Does power-up number i overlap the paddle?
+bool powerUpTouchesPaddle(int i)
+{
+    return powerX[i] < paddleX + paddleW &&
+           powerX[i] + POWERUP_SIZE > paddleX &&
+           powerY[i] + POWERUP_SIZE > PADDLE_Y &&
+           powerY[i] < PADDLE_Y + PADDLE_H;
+}
+
+// Moves every power-up down, catches it or lets it fall away
+void updatePowerUps()
+{
+    for (int i = 0; i < MAX_POWERUPS; i++)
+    {
+        if (!powerActive[i])
+        {
+            continue;
+        }
+
+        powerY[i] = powerY[i] + POWERUP_SPEED;
+
+        if (powerUpTouchesPaddle(i))
+        {
+            applyPowerUp(powerType[i]);
+            powerActive[i] = false;
+        }
+        else if (powerY[i] > WINDOW_H)
+        {
+            powerActive[i] = false;
+        }
+    }
+}
+
+// Counts down the wide paddle and shrinks it back at 0
+void updateWidePaddle()
+{
+    if (wideFramesLeft > 0)
+    {
+        wideFramesLeft--;
+
+        if (wideFramesLeft == 0)
+        {
+            paddleW = PADDLE_W;
+        }
+    }
+}
+
+// ============================================================
+// Hitting bricks
+// ============================================================
+
+// One hit on a brick: take one hit off, add the score, maybe drop a power-up
 void hitBrick(int r, int c)
 {
     bricks[r][c]--;
 
     if (bricks[r][c] == 0)
     {
-        score += 50;
+        score += SCORE_BREAK;
+
+        if (rand() % POWERUP_CHANCE == 0)
+        {
+            spawnPowerUp(r, c);
+        }
     }
     else
     {
-        score += 10;
+        score += SCORE_HIT;
     }
 }
 
@@ -312,16 +404,65 @@ void movePaddle()
         paddleX = 0;
     }
 
-    if (paddleX > WINDOW_W - PADDLE_W)
+    if (paddleX > WINDOW_W - paddleW)
     {
-        paddleX = WINDOW_W - PADDLE_W;
+        paddleX = WINDOW_W - paddleW;
     }
 
     // Before launch the ball sits in the middle of the paddle
     if (!start)
     {
-        ballX = paddleX + (PADDLE_W - BALL_SIZE) / 2;
+        ballX = paddleX + (paddleW - BALL_SIZE) / 2;
         ballY = PADDLE_Y - BALL_SIZE;
+    }
+}
+
+// Is the ball overlapping the paddle?
+bool ballTouchesPaddle()
+{
+    int leftB = ballX;
+    int rightB = ballX + BALL_SIZE;
+    int bottomB = ballY + BALL_SIZE;
+    int topB = ballY;
+
+    int leftP = paddleX;
+    int rightP = paddleX + paddleW;
+    int bottomP = PADDLE_Y + PADDLE_H;
+    int topP = PADDLE_Y;
+
+    return leftB < rightP && rightB > leftP && bottomB > topP && topB < bottomP;
+}
+
+// The part of the paddle that was hit decides dx
+void bounceOnPaddle()
+{
+    // Only a falling ball bounces
+    if (dy <= 0 || !ballTouchesPaddle())
+    {
+        return;
+    }
+
+    dy = -BALL_SPEED_Y;
+    ballY = PADDLE_Y - BALL_SIZE;
+
+    // Which part of the paddle was hit (0 to 3)
+    int part = (ballX + BALL_SIZE / 2 - paddleX) * PADDLE_PARTS / paddleW;
+
+    if (part <= 0)
+    {
+        dx = -BALL_DX_FAST;
+    }
+    else if (part == 1)
+    {
+        dx = -BALL_DX_SLOW;
+    }
+    else if (part == 2)
+    {
+        dx = BALL_DX_SLOW;
+    }
+    else
+    {
+        dx = BALL_DX_FAST;
     }
 }
 
@@ -346,17 +487,12 @@ void launchBall()
     }
 }
 
-void moveBall()
+// x step: undo it if the ball touched a wall or a brick
+void moveBallX()
 {
     int r = 0;
     int c = 0;
 
-    if (!start)
-    {
-        return;
-    }
-
-    // x step, undo on wall or brick
     ballX = ballX + dx;
 
     if (ballX < 0 || ballX > WINDOW_W - BALL_SIZE)
@@ -370,8 +506,14 @@ void moveBall()
         ballX = ballX - dx;
         dx = -dx;
     }
+}
 
-    // y step, undo on top wall or brick
+// y step: undo it if the ball touched the top or a brick
+void moveBallY()
+{
+    int r = 0;
+    int c = 0;
+
     ballY = ballY + dy;
 
     if (ballY < HUD_H)
@@ -385,6 +527,17 @@ void moveBall()
         ballY = ballY - dy;
         dy = -dy;
     }
+}
+
+void moveBall()
+{
+    if (!start)
+    {
+        return;
+    }
+
+    moveBallX();
+    moveBallY();
 }
 
 // ============================================================
@@ -474,6 +627,7 @@ bool loadGame()
     start = false;
     dx = 0.f;
     dy = 0.f;
+    resetPowerUps();
     gameState = STATE_PLAYING;
     return true;
 }
@@ -490,13 +644,18 @@ void clearSave()
 
 void startNewGame()
 {
+    if (!loadLevel(bricks))
+    {
+        return;
+    }
+
     lives = START_LIVES;
     score = 0;
     paddleX = PADDLE_START_X;
     start = false;
     dx = 0.f;
     dy = 0.f;
-    loadLevel(bricks);
+    resetPowerUps();
     gameState = STATE_PLAYING;
 }
 
@@ -586,6 +745,8 @@ void updatePlaying()
     movePaddle();
     moveBall();
     bounceOnPaddle();
+    updatePowerUps();
+    updateWidePaddle();
 
     // Ball fell below the window
     if (ballY > WINDOW_H)
@@ -644,32 +805,27 @@ void drawBackground(sf::RenderWindow &window)
     window.draw(line);
 }
 
-// Score text and lives
-void drawHUD(sf::RenderWindow &window, const sf::Font &font)
+// HUD strip with the line under it
+void drawHudBackground(sf::RenderWindow &window)
 {
-    // HUD background strip
     sf::RectangleShape strip({(float)WINDOW_W, (float)HUD_H});
     strip.setFillColor(sf::Color(25, 25, 55));
     window.draw(strip);
 
-    // Line between the HUD and the playfield
     sf::RectangleShape border({(float)WINDOW_W, 2.f});
     border.setFillColor(sf::Color(110, 110, 200));
     border.setPosition({0.f, HUD_H - 2.f});
     window.draw(border);
+}
 
-    sf::Text scoreText(font, "Score: " + std::to_string(score), 24);
-    scoreText.setPosition({10.f, 10.f});
-    scoreText.setFillColor(sf::Color::White);
-    window.draw(scoreText);
-
-    // Small label before the life circles
+// One small circle for every life left
+void drawLives(sf::RenderWindow &window, const sf::Font &font)
+{
     sf::Text livesText(font, "Lives", 18);
     livesText.setPosition({WINDOW_W - 160.f, 15.f});
     livesText.setFillColor(sf::Color(170, 170, 210));
     window.draw(livesText);
 
-    // One small circle for every life left
     sf::CircleShape lifeDot(8.f);
     lifeDot.setFillColor(sf::Color(255, 90, 110));
     for (int i = 0; i < lives; i++)
@@ -677,6 +833,19 @@ void drawHUD(sf::RenderWindow &window, const sf::Font &font)
         lifeDot.setPosition({WINDOW_W - 30.f - i * 25.f, 17.f});
         window.draw(lifeDot);
     }
+}
+
+// Score text and lives
+void drawHUD(sf::RenderWindow &window, const sf::Font &font)
+{
+    drawHudBackground(window);
+
+    sf::Text scoreText(font, "Score: " + std::to_string(score), 24);
+    scoreText.setPosition({10.f, 10.f});
+    scoreText.setFillColor(sf::Color::White);
+    window.draw(scoreText);
+
+    drawLives(window, font);
 }
 
 void drawBricks(sf::RenderWindow &window)
@@ -717,7 +886,7 @@ void drawBricks(sf::RenderWindow &window)
 
 void drawPaddle(sf::RenderWindow &window)
 {
-    sf::RectangleShape paddle({(float)PADDLE_W, (float)PADDLE_H});
+    sf::RectangleShape paddle({(float)paddleW, (float)PADDLE_H});
     paddle.setFillColor(sf::Color(60, 220, 255));
     paddle.setOutlineThickness(1.f);
     paddle.setOutlineColor(sf::Color::White);
@@ -734,21 +903,19 @@ void drawBall(sf::RenderWindow &window)
 }
 
 // Small hint under the paddle area while the ball is waiting
-// Only draws. When to show it (ball not launched) is decided by the caller.
 void drawLaunchHint(sf::RenderWindow &window, const sf::Font &font)
 {
-    drawCenteredText(window, font, "Press SPACE to launch", 18, 675.f,
+    drawCenteredText(window, font, "Press SPACE to launch", 18, LAUNCH_HINT_Y,
                      sf::Color(170, 170, 210));
 }
 
-// Draws one falling power-up capsule at (x, y), size 24 x 24
+// Draws one falling power-up capsule at (x, y)
 // type: 'W' = wide paddle (blue), '+' = extra life (green)
-// Only draws. Falling, catching and effects are game logic.
 void drawPowerUp(sf::RenderWindow &window, const sf::Font &font,
                  float x, float y, char type)
 {
-    sf::RectangleShape box({24.f, 24.f});
-    if (type == 'W')
+    sf::RectangleShape box({(float)POWERUP_SIZE, (float)POWERUP_SIZE});
+    if (type == POWERUP_WIDE)
     {
         box.setFillColor(sf::Color(60, 140, 255));
     }
@@ -765,8 +932,20 @@ void drawPowerUp(sf::RenderWindow &window, const sf::Font &font,
     letter.setFillColor(sf::Color::White);
     sf::FloatRect b = letter.getLocalBounds();
     letter.setOrigin({b.position.x + b.size.x / 2.f, b.position.y + b.size.y / 2.f});
-    letter.setPosition({x + 12.f, y + 12.f});
+    letter.setPosition({x + POWERUP_SIZE / 2.f, y + POWERUP_SIZE / 2.f});
     window.draw(letter);
+}
+
+// Draws every falling power-up
+void drawPowerUps(sf::RenderWindow &window, const sf::Font &font)
+{
+    for (int i = 0; i < MAX_POWERUPS; i++)
+    {
+        if (powerActive[i])
+        {
+            drawPowerUp(window, font, powerX[i], powerY[i], powerType[i]);
+        }
+    }
 }
 
 // Main menu (only draws, the choice logic is ours)
@@ -777,20 +956,21 @@ void drawMenu(sf::RenderWindow &window, const sf::Font &font,
 {
     drawCenteredText(window, font, "BLOCK BUSTER", 56, 150.f, sf::Color(60, 220, 255));
 
-    std::string options[3] = {"New Game", "Continue", "Exit"};
+    std::string options[MENU_COUNT] = {"New Game", "Continue", "Exit"};
 
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < MENU_COUNT; i++)
     {
+        float y = MENU_FIRST_Y + i * MENU_SPACING;
+
         // The selected option is yellow with an arrow, the others are white
         if (i == selected)
         {
-            drawCenteredText(window, font, "> " + options[i] + " <", 32,
-                             280.f + i * 60.f, sf::Color(255, 210, 60));
+            drawCenteredText(window, font, "> " + options[i] + " <", 32, y,
+                             sf::Color(255, 210, 60));
         }
         else
         {
-            drawCenteredText(window, font, options[i], 32,
-                             280.f + i * 60.f, sf::Color::White);
+            drawCenteredText(window, font, options[i], 32, y, sf::Color::White);
         }
     }
 
@@ -824,7 +1004,7 @@ void drawEndScreen(sf::RenderWindow &window, const sf::Font &font,
     drawCenteredText(window, font, "Press Enter", 24, 400.f, sf::Color(255, 210, 60));
 }
 
-// Bricks, HUD, paddle and ball
+// Bricks, HUD, paddle, ball and power-ups
 void drawPlayfield(sf::RenderWindow &window, const sf::Font &font)
 {
     drawBackground(window);
@@ -832,6 +1012,7 @@ void drawPlayfield(sf::RenderWindow &window, const sf::Font &font)
     drawHUD(window, font);
     drawPaddle(window);
     drawBall(window);
+    drawPowerUps(window, font);
 
     if (!start && gameState == STATE_PLAYING)
     {
@@ -883,6 +1064,9 @@ int main()
     {
         return -1;
     }
+
+    // No power-ups falling at the start
+    resetPowerUps();
 
     // Game loop
     while (window.isOpen())
