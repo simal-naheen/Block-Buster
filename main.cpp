@@ -584,8 +584,8 @@ void drawEndScreen(sf::RenderWindow &window, const sf::Font &font,
     }
 
     drawCenteredText(window, font, message, 64, 220.f, messageColor);
-    drawCenteredText(window, font, "Final Score: " + std::to_string(finalScore), 32, 320.f);
-    drawCenteredText(window, font, "Press Enter", 24, 400.f, sf::Color(255, 210, 60));
+    drawCenteredText(window, font, "Final Score : " + std::to_string(finalScore), 32, 320.f);
+    drawCenteredText(window, font, "Press Enter ", 24, 400.f, sf::Color(255, 210, 60));
 }
 
 void drawGame(sf::RenderWindow &window, const sf::Font &font)
