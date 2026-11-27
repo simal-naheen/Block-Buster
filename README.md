@@ -3,7 +3,7 @@
 A brick breaker game in C++ with SFML 3.0.2.
 Made for CS1002 Programming Fundamentals, Fall 2026, FAST NUCES Lahore.
 
-<img width="587" height="727" alt="image" src="https://github.com/user-attachments/assets/4a848be4-8e80-4780-b88b-e9fdee7d05c9" />
+<img width="250" height="400" alt="image" src="https://github.com/user-attachments/assets/4a848be4-8e80-4780-b88b-e9fdee7d05c9" />
 
 
 ## Team
