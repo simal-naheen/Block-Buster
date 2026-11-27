@@ -22,6 +22,7 @@ const int BRICK_W = 60;
 const int BRICK_H = 25;
 const int BRICKS_Y = 100;
 const float GAP = 2.f;
+const int MAX_BRICK_HITS = 3; // a brick holds 0 (empty) to 3 hits
 
 // Paddle
 const int PADDLE_W = 100;
@@ -33,20 +34,21 @@ const int PADDLE_PARTS = 4; // the paddle is split in 4 parts for the bounce
 
 // Ball
 const int BALL_SIZE = 12;
+const int BALL_CORNERS = 4;
 const float BALL_SPEED_Y = 5.f;
 const float BALL_DX_SLOW = 3.f;
 const float BALL_DX_FAST = 6.f;
 
 // Rules
 const int START_LIVES = 3;
+const int MAX_LIVES = 5;
 const int SCORE_HIT = 10;
 const int SCORE_BREAK = 50;
 
-// Power-ups (bonus)
+// Power-ups (bonus), only one can fall at a time
 const int POWERUP_SIZE = 24;
 const float POWERUP_SPEED = 3.f;
 const int POWERUP_CHANCE = 5; // 1 in 5 broken bricks drops a power-up
-const int MAX_POWERUPS = 10;
 const char POWERUP_WIDE = 'W';
 const char POWERUP_LIFE = '+';
 const int WIDE_PADDLE_W = 150;
@@ -73,7 +75,10 @@ const int MENU_COUNT = 3;
 const float MENU_FIRST_Y = 280.f;
 const float MENU_SPACING = 60.f;
 
-// Text positions
+// HUD and text positions
+const float LIFE_DOT_RIGHT = 30.f;
+const float LIFE_DOT_SPACING = 25.f;
+const float LIVES_LABEL_X = WINDOW_W - LIFE_DOT_RIGHT - MAX_LIVES * LIFE_DOT_SPACING - 60.f;
 const float LAUNCH_HINT_Y = 675.f;
 
 // ============================================================
@@ -98,11 +103,11 @@ float dx = 0.f;
 float dy = 0.f;
 bool start = false;
 
-// Falling power-ups (one slot per power-up)
-bool powerActive[MAX_POWERUPS];
-float powerX[MAX_POWERUPS];
-float powerY[MAX_POWERUPS];
-char powerType[MAX_POWERUPS];
+// The falling power-up (only one at a time)
+bool powerActive = false;
+float powerX = 0.f;
+float powerY = 0.f;
+char powerType = POWERUP_WIDE;
 
 // Game state
 int gameState = STATE_MENU;
@@ -113,6 +118,12 @@ std::string endMessage = "";
 // ============================================================
 // Loading the level and resources
 // ============================================================
+
+// Is this a valid number for a brick (0 to MAX_BRICK_HITS)?
+bool validBrickValue(int value)
+{
+    return value >= 0 && value <= MAX_BRICK_HITS;
+}
 
 bool loadLevel(int arr[][COLS])
 {
@@ -135,12 +146,27 @@ bool loadLevel(int arr[][COLS])
         return false;
     }
 
-    // Reading the 2D array
+    // Reading into a temporary array, so a bad file changes nothing
+    int level[ROWS][COLS];
+
     for (int r = 0; r < ROWS; r++)
     {
         for (int c = 0; c < COLS; c++)
         {
-            fin >> arr[r][c];
+            if (!(fin >> level[r][c]) || !validBrickValue(level[r][c]))
+            {
+                std::cout << "Wrong Brick Value\n";
+                return false;
+            }
+        }
+    }
+
+    // The file is fine, now it is copied
+    for (int r = 0; r < ROWS; r++)
+    {
+        for (int c = 0; c < COLS; c++)
+        {
+            arr[r][c] = level[r][c];
         }
     }
     return true;
@@ -210,6 +236,99 @@ void handleInput(sf::RenderWindow &window)
 }
 
 // ============================================================
+// Power-up (bonus)
+// ============================================================
+
+// Removes the falling power-up and the wide paddle effect
+void resetPowerUps()
+{
+    powerActive = false;
+    paddleW = PADDLE_W;
+    wideFramesLeft = 0;
+}
+
+// Drops a random power-up from the middle of the broken brick
+void spawnPowerUp(int r, int c)
+{
+    // If one is already falling, no new one appears
+    if (powerActive)
+    {
+        return;
+    }
+
+    powerActive = true;
+    powerX = c * BRICK_W + (BRICK_W - POWERUP_SIZE) / 2;
+    powerY = BRICKS_Y + r * BRICK_H;
+
+    if (rand() % 2 == 0)
+    {
+        powerType = POWERUP_WIDE;
+    }
+    else
+    {
+        powerType = POWERUP_LIFE;
+    }
+}
+
+// The effect of a caught power-up
+void applyPowerUp(char type)
+{
+    if (type == POWERUP_WIDE)
+    {
+        paddleW = WIDE_PADDLE_W;
+        wideFramesLeft = WIDE_PADDLE_FRAMES;
+    }
+    else if (lives < MAX_LIVES)
+    {
+        lives++;
+    }
+}
+
+// Does the falling power-up overlap the paddle?
+bool powerUpTouchesPaddle()
+{
+    return powerX < paddleX + paddleW &&
+           powerX + POWERUP_SIZE > paddleX &&
+           powerY + POWERUP_SIZE > PADDLE_Y &&
+           powerY < PADDLE_Y + PADDLE_H;
+}
+
+// Moves the power-up down, catches it or lets it fall away
+void updatePowerUp()
+{
+    if (!powerActive)
+    {
+        return;
+    }
+
+    powerY = powerY + POWERUP_SPEED;
+
+    if (powerUpTouchesPaddle())
+    {
+        applyPowerUp(powerType);
+        powerActive = false;
+    }
+    else if (powerY > WINDOW_H)
+    {
+        powerActive = false;
+    }
+}
+
+// Counts down the wide paddle and shrinks it back at 0
+void updateWidePaddle()
+{
+    if (wideFramesLeft > 0)
+    {
+        wideFramesLeft--;
+
+        if (wideFramesLeft == 0)
+        {
+            paddleW = PADDLE_W;
+        }
+    }
+}
+
+// ============================================================
 // Ball and bricks collision
 // ============================================================
 
@@ -229,138 +348,6 @@ bool cornerHitsBrick(float cx, float cy, int &r, int &c)
     return bricks[r][c] > 0;
 }
 
-// Checks the 4 corners of the ball, stops at the first brick found
-bool findBrickHit(int &r, int &c)
-{
-    // The last pixel of the ball is at + BALL_SIZE - 1
-    int leftB = ballX;
-    int rightB = ballX + BALL_SIZE - 1;
-    int bottomB = ballY + BALL_SIZE - 1;
-    int topB = ballY;
-
-    if (cornerHitsBrick(leftB, topB, r, c))
-    {
-        return true;
-    }
-    if (cornerHitsBrick(rightB, topB, r, c))
-    {
-        return true;
-    }
-    if (cornerHitsBrick(leftB, bottomB, r, c))
-    {
-        return true;
-    }
-    if (cornerHitsBrick(rightB, bottomB, r, c))
-    {
-        return true;
-    }
-    return false;
-}
-
-// ============================================================
-// Power-ups (bonus)
-// ============================================================
-
-// Removes all falling power-ups and the wide paddle effect
-void resetPowerUps()
-{
-    for (int i = 0; i < MAX_POWERUPS; i++)
-    {
-        powerActive[i] = false;
-    }
-    paddleW = PADDLE_W;
-    wideFramesLeft = 0;
-}
-
-// Drops a random power-up from the middle of the broken brick
-void spawnPowerUp(int r, int c)
-{
-    for (int i = 0; i < MAX_POWERUPS; i++)
-    {
-        if (!powerActive[i])
-        {
-            powerActive[i] = true;
-            powerX[i] = c * BRICK_W + (BRICK_W - POWERUP_SIZE) / 2;
-            powerY[i] = BRICKS_Y + r * BRICK_H;
-
-            if (rand() % 2 == 0)
-            {
-                powerType[i] = POWERUP_WIDE;
-            }
-            else
-            {
-                powerType[i] = POWERUP_LIFE;
-            }
-            return;
-        }
-    }
-}
-
-// The effect of a caught power-up
-void applyPowerUp(char type)
-{
-    if (type == POWERUP_WIDE)
-    {
-        paddleW = WIDE_PADDLE_W;
-        wideFramesLeft = WIDE_PADDLE_FRAMES;
-    }
-    else
-    {
-        lives++;
-    }
-}
-
-// Does power-up number i overlap the paddle?
-bool powerUpTouchesPaddle(int i)
-{
-    return powerX[i] < paddleX + paddleW &&
-           powerX[i] + POWERUP_SIZE > paddleX &&
-           powerY[i] + POWERUP_SIZE > PADDLE_Y &&
-           powerY[i] < PADDLE_Y + PADDLE_H;
-}
-
-// Moves every power-up down, catches it or lets it fall away
-void updatePowerUps()
-{
-    for (int i = 0; i < MAX_POWERUPS; i++)
-    {
-        if (!powerActive[i])
-        {
-            continue;
-        }
-
-        powerY[i] = powerY[i] + POWERUP_SPEED;
-
-        if (powerUpTouchesPaddle(i))
-        {
-            applyPowerUp(powerType[i]);
-            powerActive[i] = false;
-        }
-        else if (powerY[i] > WINDOW_H)
-        {
-            powerActive[i] = false;
-        }
-    }
-}
-
-// Counts down the wide paddle and shrinks it back at 0
-void updateWidePaddle()
-{
-    if (wideFramesLeft > 0)
-    {
-        wideFramesLeft--;
-
-        if (wideFramesLeft == 0)
-        {
-            paddleW = PADDLE_W;
-        }
-    }
-}
-
-// ============================================================
-// Hitting bricks
-// ============================================================
-
 // One hit on a brick: take one hit off, add the score, maybe drop a power-up
 void hitBrick(int r, int c)
 {
@@ -379,6 +366,57 @@ void hitBrick(int r, int c)
     {
         score += SCORE_HIT;
     }
+}
+
+// Is this brick already in the list of bricks found in this step?
+bool alreadyFound(const int foundR[], const int foundC[], int count, int r, int c)
+{
+    for (int i = 0; i < count; i++)
+    {
+        if (foundR[i] == r && foundC[i] == c)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Every different brick under the 4 corners loses one hit.
+// A brick under two corners loses only one hit.
+// Gives back how many bricks were hit.
+int hitTouchedBricks()
+{
+    // The last pixel of the ball is at + BALL_SIZE - 1
+    float cornersX[BALL_CORNERS] = {ballX, ballX + BALL_SIZE - 1,
+                                    ballX, ballX + BALL_SIZE - 1};
+    float cornersY[BALL_CORNERS] = {ballY, ballY,
+                                    ballY + BALL_SIZE - 1, ballY + BALL_SIZE - 1};
+
+    int foundR[BALL_CORNERS];
+    int foundC[BALL_CORNERS];
+    int count = 0;
+
+    // First find all the bricks, so a brick that breaks does not hide the next one
+    for (int i = 0; i < BALL_CORNERS; i++)
+    {
+        int r = 0;
+        int c = 0;
+
+        if (cornerHitsBrick(cornersX[i], cornersY[i], r, c) &&
+            !alreadyFound(foundR, foundC, count, r, c))
+        {
+            foundR[count] = r;
+            foundC[count] = c;
+            count++;
+        }
+    }
+
+    // Then every brick found loses one hit
+    for (int i = 0; i < count; i++)
+    {
+        hitBrick(foundR[i], foundC[i]);
+    }
+    return count;
 }
 
 // ============================================================
@@ -490,9 +528,6 @@ void launchBall()
 // x step: undo it if the ball touched a wall or a brick
 void moveBallX()
 {
-    int r = 0;
-    int c = 0;
-
     ballX = ballX + dx;
 
     if (ballX < 0 || ballX > WINDOW_W - BALL_SIZE)
@@ -500,9 +535,8 @@ void moveBallX()
         ballX = ballX - dx;
         dx = -dx;
     }
-    else if (findBrickHit(r, c))
+    else if (hitTouchedBricks() > 0)
     {
-        hitBrick(r, c);
         ballX = ballX - dx;
         dx = -dx;
     }
@@ -511,9 +545,6 @@ void moveBallX()
 // y step: undo it if the ball touched the top or a brick
 void moveBallY()
 {
-    int r = 0;
-    int c = 0;
-
     ballY = ballY + dy;
 
     if (ballY < HUD_H)
@@ -521,9 +552,8 @@ void moveBallY()
         ballY = ballY - dy;
         dy = -dy;
     }
-    else if (findBrickHit(r, c))
+    else if (hitTouchedBricks() > 0)
     {
-        hitBrick(r, c);
         ballY = ballY - dy;
         dy = -dy;
     }
@@ -594,21 +624,21 @@ bool loadGame()
         return false;
     }
 
-    for (int r = 0; r < ROWS; r++)
-    {
-        for (int c = 0; c < COLS; c++)
-        {
-            if (!(fin >> savedBricks[r][c]))
-            {
-                return false;
-            }
-        }
-    }
-
     // A save with no lives is not a game in progress
     if (savedLives <= 0)
     {
         return false;
+    }
+
+    for (int r = 0; r < ROWS; r++)
+    {
+        for (int c = 0; c < COLS; c++)
+        {
+            if (!(fin >> savedBricks[r][c]) || !validBrickValue(savedBricks[r][c]))
+            {
+                return false;
+            }
+        }
     }
 
     // The file is fine, now the real variables change
@@ -628,6 +658,7 @@ bool loadGame()
     dx = 0.f;
     dy = 0.f;
     resetPowerUps();
+    showNoSave = false;
     gameState = STATE_PLAYING;
     return true;
 }
@@ -656,6 +687,7 @@ void startNewGame()
     dx = 0.f;
     dy = 0.f;
     resetPowerUps();
+    showNoSave = false;
     gameState = STATE_PLAYING;
 }
 
@@ -664,6 +696,13 @@ void endGame(const std::string &message)
     clearSave();
     endMessage = message;
     gameState = STATE_GAME_OVER;
+}
+
+void goToMenu()
+{
+    menuSelected = MENU_NEW_GAME;
+    showNoSave = false;
+    gameState = STATE_MENU;
 }
 
 // Menu keys: Up, Down, Enter
@@ -707,32 +746,37 @@ void menuInput(sf::RenderWindow &window)
     }
 }
 
+// Keys while playing: Esc saves, Space launches
+void playingInput()
+{
+    if (pressedKey == KEY_ESC)
+    {
+        saveGame();
+        goToMenu();
+    }
+    else if (pressedKey == KEY_SPACE && !start)
+    {
+        launchBall();
+    }
+}
+
 // What the pressed key means in the current state
 void handleStateInput(sf::RenderWindow &window)
 {
-    if (gameState == STATE_MENU)
+    switch (gameState)
     {
+    case STATE_MENU:
         menuInput(window);
-    }
-    else if (gameState == STATE_PLAYING)
-    {
-        if (pressedKey == KEY_ESC)
-        {
-            saveGame();
-            gameState = STATE_MENU;
-        }
-        else if (pressedKey == KEY_SPACE && !start)
-        {
-            launchBall();
-        }
-    }
-    else if (gameState == STATE_GAME_OVER)
-    {
+        break;
+    case STATE_PLAYING:
+        playingInput();
+        break;
+    case STATE_GAME_OVER:
         if (pressedKey == KEY_ENTER)
         {
-            menuSelected = MENU_NEW_GAME;
-            gameState = STATE_MENU;
+            goToMenu();
         }
+        break;
     }
 }
 
@@ -745,7 +789,7 @@ void updatePlaying()
     movePaddle();
     moveBall();
     bounceOnPaddle();
-    updatePowerUps();
+    updatePowerUp();
     updateWidePaddle();
 
     // Ball fell below the window
@@ -767,10 +811,14 @@ void updatePlaying()
 
 void updateGame()
 {
-    // Menu and end screen have nothing to update
-    if (gameState == STATE_PLAYING)
+    switch (gameState)
     {
+    case STATE_PLAYING:
         updatePlaying();
+        break;
+    case STATE_MENU:
+    case STATE_GAME_OVER:
+        break; // nothing moves on these screens
     }
 }
 
@@ -822,7 +870,7 @@ void drawHudBackground(sf::RenderWindow &window)
 void drawLives(sf::RenderWindow &window, const sf::Font &font)
 {
     sf::Text livesText(font, "Lives", 18);
-    livesText.setPosition({WINDOW_W - 160.f, 15.f});
+    livesText.setPosition({LIVES_LABEL_X, 15.f});
     livesText.setFillColor(sf::Color(170, 170, 210));
     window.draw(livesText);
 
@@ -830,7 +878,7 @@ void drawLives(sf::RenderWindow &window, const sf::Font &font)
     lifeDot.setFillColor(sf::Color(255, 90, 110));
     for (int i = 0; i < lives; i++)
     {
-        lifeDot.setPosition({WINDOW_W - 30.f - i * 25.f, 17.f});
+        lifeDot.setPosition({WINDOW_W - LIFE_DOT_RIGHT - i * LIFE_DOT_SPACING, 17.f});
         window.draw(lifeDot);
     }
 }
@@ -851,10 +899,10 @@ void drawHUD(sf::RenderWindow &window, const sf::Font &font)
 void drawBricks(sf::RenderWindow &window)
 {
     // Colour for each number in the bricks array (0 = no brick)
-    sf::Color colors[4] = {sf::Color(25, 25, 45),
-                           sf::Color(60, 220, 150),
-                           sf::Color(255, 210, 60),
-                           sf::Color(255, 75, 105)};
+    sf::Color colors[MAX_BRICK_HITS + 1] = {sf::Color(25, 25, 45),
+                                            sf::Color(60, 220, 150),
+                                            sf::Color(255, 210, 60),
+                                            sf::Color(255, 75, 105)};
 
     // One shape only, smaller than the box so a gap shows
     sf::RectangleShape brick({BRICK_W - GAP, BRICK_H - GAP});
@@ -909,7 +957,7 @@ void drawLaunchHint(sf::RenderWindow &window, const sf::Font &font)
                      sf::Color(170, 170, 210));
 }
 
-// Draws one falling power-up capsule at (x, y)
+// Draws the falling power-up capsule at (x, y)
 // type: 'W' = wide paddle (blue), '+' = extra life (green)
 void drawPowerUp(sf::RenderWindow &window, const sf::Font &font,
                  float x, float y, char type)
@@ -934,18 +982,6 @@ void drawPowerUp(sf::RenderWindow &window, const sf::Font &font,
     letter.setOrigin({b.position.x + b.size.x / 2.f, b.position.y + b.size.y / 2.f});
     letter.setPosition({x + POWERUP_SIZE / 2.f, y + POWERUP_SIZE / 2.f});
     window.draw(letter);
-}
-
-// Draws every falling power-up
-void drawPowerUps(sf::RenderWindow &window, const sf::Font &font)
-{
-    for (int i = 0; i < MAX_POWERUPS; i++)
-    {
-        if (powerActive[i])
-        {
-            drawPowerUp(window, font, powerX[i], powerY[i], powerType[i]);
-        }
-    }
 }
 
 // Main menu (only draws, the choice logic is ours)
@@ -1004,7 +1040,7 @@ void drawEndScreen(sf::RenderWindow &window, const sf::Font &font,
     drawCenteredText(window, font, "Press Enter", 24, 400.f, sf::Color(255, 210, 60));
 }
 
-// Bricks, HUD, paddle, ball and power-ups
+// Bricks, HUD, paddle, ball and the power-up
 void drawPlayfield(sf::RenderWindow &window, const sf::Font &font)
 {
     drawBackground(window);
@@ -1012,7 +1048,11 @@ void drawPlayfield(sf::RenderWindow &window, const sf::Font &font)
     drawHUD(window, font);
     drawPaddle(window);
     drawBall(window);
-    drawPowerUps(window, font);
+
+    if (powerActive)
+    {
+        drawPowerUp(window, font, powerX, powerY, powerType);
+    }
 
     if (!start && gameState == STATE_PLAYING)
     {
@@ -1024,18 +1064,18 @@ void drawGame(sf::RenderWindow &window, const sf::Font &font)
 {
     window.clear(sf::Color(15, 15, 35));
 
-    if (gameState == STATE_MENU)
+    switch (gameState)
     {
+    case STATE_MENU:
         drawMenu(window, font, menuSelected, showNoSave);
-    }
-    else if (gameState == STATE_PLAYING)
-    {
+        break;
+    case STATE_PLAYING:
         drawPlayfield(window, font);
-    }
-    else if (gameState == STATE_GAME_OVER)
-    {
+        break;
+    case STATE_GAME_OVER:
         drawPlayfield(window, font);
         drawEndScreen(window, font, endMessage, score);
+        break;
     }
 
     window.display();
@@ -1064,9 +1104,6 @@ int main()
     {
         return -1;
     }
-
-    // No power-ups falling at the start
-    resetPowerUps();
 
     // Game loop
     while (window.isOpen())
