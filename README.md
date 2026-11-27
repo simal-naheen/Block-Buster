@@ -6,6 +6,7 @@ Made for CS1002 Programming Fundamentals, Fall 2026, FAST NUCES Lahore.
 <img width="250" height="400" alt="image" src="https://github.com/user-attachments/assets/4a848be4-8e80-4780-b88b-e9fdee7d05c9" />
 <img width="250" height="400" alt="image" src="https://github.com/user-attachments/assets/41f5a6a2-97aa-473a-90cf-abc2e505671d" />
 <img width="250" height="400" alt="image" src="https://github.com/user-attachments/assets/cb6e1090-0d7c-406f-b3fb-b52f519352a8" />
+<img width="250" height="400" alt="image" src="https://github.com/user-attachments/assets/6c23ba22-68a2-4906-acc1-ada4a1f42f59" />
 
 
 ## Team
