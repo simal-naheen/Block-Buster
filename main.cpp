@@ -22,7 +22,7 @@ const int BRICK_W = 60;
 const int BRICK_H = 25;
 const int BRICKS_Y = 100;
 const float GAP = 2.f;
-// Paddle Constant
+
 // Paddle
 const int PADDLE_W = 100;
 const int PADDLE_H = 14;
@@ -36,19 +36,34 @@ const float BALL_SPEED_Y = 5.f;
 const float BALL_DX_SLOW = 3.f;
 const float BALL_DX_FAST = 6.f;
 
-// Keys that are pressed once (menu and game states will use these)
+// Keys that are pressed once (menu and game states use these)
 const int KEY_NONE = 0;
 const int KEY_UP = 1;
 const int KEY_DOWN = 2;
 const int KEY_ENTER = 3;
 const int KEY_ESC = 4;
+const int KEY_SPACE = 5;
+
+// Game states
+const int STATE_MENU = 0;
+const int STATE_PLAYING = 1;
+const int STATE_GAME_OVER = 2;
+
+// Menu options
+const int MENU_NEW_GAME = 0;
+const int MENU_CONTINUE = 1;
+const int MENU_EXIT = 2;
+const int MENU_COUNT = 3;
+
+// Game rules
+const int START_LIVES = 3;
 
 // ============================================================
 // Variables
 // ============================================================
 
 int bricks[ROWS][COLS];
-int lives = 3;
+int lives = START_LIVES;
 int score = 0;
 
 // The key pressed in this frame, set inside the event loop
@@ -62,6 +77,12 @@ float ballY = PADDLE_Y - BALL_SIZE;
 float dx = 0.f;
 float dy = 0.f;
 bool start = false;
+
+// Game state
+int gameState = STATE_MENU;
+int menuSelected = MENU_NEW_GAME;
+bool showNoSave = false;
+std::string endMessage = "";
 
 // ============================================================
 // Ball and paddle collision
@@ -192,33 +213,21 @@ void handleInput(sf::RenderWindow &window)
             {
                 pressedKey = KEY_ESC;
             }
-
-            // Launch the ball
-            if (key->code == sf::Keyboard::Key::Space && !start)
+            else if (key->code == sf::Keyboard::Key::Space)
             {
-                start = true;
-                dy = -BALL_SPEED_Y;
-
-                int side = rand() % 2;
-                if (side == 0)
-                {
-                    dx = BALL_DX_SLOW;
-                }
-                else
-                {
-                    dx = -BALL_DX_SLOW;
-                }
+                pressedKey = KEY_SPACE;
             }
         }
     }
 }
+
 // ============================================================
-// Starting with ball and Bricks collision
+// Ball and bricks collision
 // ============================================================
 
 bool cornerHitsBrick(float cx, float cy, int &r, int &c)
 {
-
+    // Only the brick area counts
     if (cx < 0 || cx >= COLS * BRICK_W ||
         cy < BRICKS_Y || cy >= BRICKS_Y + ROWS * BRICK_H)
     {
@@ -238,10 +247,7 @@ bool cornerHitsBrick(float cx, float cy, int &r, int &c)
     }
 }
 
-// ============================================================
-// Find Brick Hit
-// ============================================================
-
+// Checks the 4 corners, stops at the first brick found
 bool findBrickHit(int &r, int &c)
 {
     int leftB = ballX;
@@ -266,6 +272,21 @@ bool findBrickHit(int &r, int &c)
         return true;
     }
     return false;
+}
+
+// One hit on a brick: take one hit off and add the score
+void hitBrick(int r, int c)
+{
+    bricks[r][c]--;
+
+    if (bricks[r][c] == 0)
+    {
+        score += 50;
+    }
+    else
+    {
+        score += 10;
+    }
 }
 
 // ============================================================
@@ -304,38 +325,38 @@ void movePaddle()
     }
 }
 
-// ============================================================
-// Hit Brick will subtract the value of r and c in bricks
-// ============================================================
-
-void hitBrick(int r, int c)
+// Puts the ball back on the paddle, waiting for Space
+void resetBall()
 {
+    start = false;
+}
 
-    bricks[r][c]--;
+void launchBall()
+{
+    start = true;
+    dy = -BALL_SPEED_Y;
 
-    if (bricks[r][c] == 0)
+    if (rand() % 2 == 0)
     {
-        score += 50;
+        dx = BALL_DX_SLOW;
     }
     else
     {
-        score += 10;
+        dx = -BALL_DX_SLOW;
     }
 }
-
-// ============================================================
-// Move Ball
-// ============================================================
 
 void moveBall()
 {
     int r = 0;
     int c = 0;
+
     if (!start)
     {
         return;
     }
 
+    // x step, undo on wall or brick
     ballX = ballX + dx;
 
     if (ballX < 0 || ballX > WINDOW_W - BALL_SIZE)
@@ -350,6 +371,7 @@ void moveBall()
         dx = -dx;
     }
 
+    // y step, undo on top wall or brick
     ballY = ballY + dy;
 
     if (ballY < HUD_H)
@@ -366,18 +388,145 @@ void moveBall()
 }
 
 // ============================================================
+// Winning and losing
+// ============================================================
+
+bool allBricksGone()
+{
+    for (int r = 0; r < ROWS; r++)
+    {
+        for (int c = 0; c < COLS; c++)
+        {
+            if (bricks[r][c] > 0)
+            {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+// ============================================================
+// Game states
+// ============================================================
+
+void startNewGame()
+{
+    lives = START_LIVES;
+    score = 0;
+    paddleX = PADDLE_START_X;
+    start = false;
+    dx = 0.f;
+    dy = 0.f;
+    loadLevel(bricks);
+    gameState = STATE_PLAYING;
+}
+
+void endGame(const std::string &message)
+{
+    endMessage = message;
+    gameState = STATE_GAME_OVER;
+}
+
+// Menu keys: Up, Down, Enter
+void menuInput(sf::RenderWindow &window)
+{
+    if (pressedKey == KEY_UP)
+    {
+        menuSelected--;
+        if (menuSelected < 0)
+        {
+            menuSelected = MENU_COUNT - 1;
+        }
+        showNoSave = false;
+    }
+    else if (pressedKey == KEY_DOWN)
+    {
+        menuSelected++;
+        if (menuSelected >= MENU_COUNT)
+        {
+            menuSelected = 0;
+        }
+        showNoSave = false;
+    }
+    else if (pressedKey == KEY_ENTER)
+    {
+        if (menuSelected == MENU_NEW_GAME)
+        {
+            startNewGame();
+        }
+        else if (menuSelected == MENU_CONTINUE)
+        {
+            showNoSave = true; // real Continue comes with save and load
+        }
+        else
+        {
+            window.close();
+        }
+    }
+}
+
+// What the pressed key means in the current state
+void handleStateInput(sf::RenderWindow &window)
+{
+    if (gameState == STATE_MENU)
+    {
+        menuInput(window);
+    }
+    else if (gameState == STATE_PLAYING)
+    {
+        if (pressedKey == KEY_SPACE && !start)
+        {
+            launchBall();
+        }
+    }
+    else if (gameState == STATE_GAME_OVER)
+    {
+        if (pressedKey == KEY_ENTER)
+        {
+            menuSelected = MENU_NEW_GAME;
+            gameState = STATE_MENU;
+        }
+    }
+}
+
+// ============================================================
 // Update
 // ============================================================
 
-void updateGame()
+void updatePlaying()
 {
-
     movePaddle();
     moveBall();
     bounceOnPaddle();
+
+    // Ball fell below the window
+    if (ballY > WINDOW_H)
+    {
+        lives--;
+        resetBall();
+    }
+
+    if (lives == 0)
+    {
+        endGame("GAME OVER");
+    }
+    else if (allBricksGone())
+    {
+        endGame("YOU WIN");
+    }
 }
 
-// ==================================0==========================
+void updateGame()
+{
+    // Menu and end screen have nothing to update
+    if (gameState == STATE_PLAYING)
+    {
+        updatePlaying();
+    }
+}
+
+// ============================================================
 // Drawing
 // ============================================================
 
@@ -497,7 +646,7 @@ void drawBall(sf::RenderWindow &window)
     window.draw(ball);
 }
 
-// NEW: small hint under the paddle area while the ball is waiting
+// Small hint under the paddle area while the ball is waiting
 // Only draws. When to show it (ball not launched) is decided by the caller.
 void drawLaunchHint(sf::RenderWindow &window, const sf::Font &font)
 {
@@ -505,7 +654,7 @@ void drawLaunchHint(sf::RenderWindow &window, const sf::Font &font)
                      sf::Color(170, 170, 210));
 }
 
-// NEW: draws one falling power-up capsule at (x, y), size 24 x 24
+// Draws one falling power-up capsule at (x, y), size 24 x 24
 // type: 'W' = wide paddle (blue), '+' = extra life (green)
 // Only draws. Falling, catching and effects are game logic.
 void drawPowerUp(sf::RenderWindow &window, const sf::Font &font,
@@ -584,18 +733,42 @@ void drawEndScreen(sf::RenderWindow &window, const sf::Font &font,
     }
 
     drawCenteredText(window, font, message, 64, 220.f, messageColor);
-    drawCenteredText(window, font, "Final Score : " + std::to_string(finalScore), 32, 320.f);
-    drawCenteredText(window, font, "Press Enter ", 24, 400.f, sf::Color(255, 210, 60));
+    drawCenteredText(window, font, "Final Score: " + std::to_string(finalScore), 32, 320.f);
+    drawCenteredText(window, font, "Press Enter", 24, 400.f, sf::Color(255, 210, 60));
 }
 
-void drawGame(sf::RenderWindow &window, const sf::Font &font)
+// Bricks, HUD, paddle and ball
+void drawPlayfield(sf::RenderWindow &window, const sf::Font &font)
 {
-    window.clear(sf::Color(15, 15, 35));
     drawBackground(window);
     drawBricks(window);
     drawHUD(window, font);
     drawPaddle(window);
     drawBall(window);
+
+    if (!start && gameState == STATE_PLAYING)
+    {
+        drawLaunchHint(window, font);
+    }
+}
+
+void drawGame(sf::RenderWindow &window, const sf::Font &font)
+{
+    window.clear(sf::Color(15, 15, 35));
+
+    if (gameState == STATE_MENU)
+    {
+        drawMenu(window, font, menuSelected, showNoSave);
+    }
+    else if (gameState == STATE_PLAYING)
+    {
+        drawPlayfield(window, font);
+    }
+    else if (gameState == STATE_GAME_OVER)
+    {
+        drawPlayfield(window, font);
+        drawEndScreen(window, font, endMessage, score);
+    }
 
     window.display();
 }
@@ -613,7 +786,7 @@ int main()
     sf::RenderWindow window(sf::VideoMode({WINDOW_W, WINDOW_H}), "Block Buster");
     window.setFramerateLimit(60);
 
-    // NEW: one KeyPressed event per press, so menu moves one step at a time
+    // One KeyPressed event per press, so the menu moves one step at a time
     window.setKeyRepeatEnabled(false);
 
     // Setting up level and font
@@ -628,6 +801,7 @@ int main()
     while (window.isOpen())
     {
         handleInput(window);
+        handleStateInput(window);
         updateGame();
         drawGame(window, font);
     }
