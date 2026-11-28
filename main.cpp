@@ -114,6 +114,7 @@ int gameState = STATE_MENU;
 int menuSelected = MENU_NEW_GAME;
 bool showNoSave = false;
 std::string endMessage = "";
+std::string levelError = ""; // why the level could not be loaded
 
 // ============================================================
 // Loading the level and resources
@@ -132,7 +133,8 @@ bool loadLevel(int arr[][COLS])
     // Checking the file
     if (!fin)
     {
-        std::cout << "File Not Found\n";
+        levelError = "level.txt not found";
+        std::cout << levelError << "\n";
         return false;
     }
 
@@ -142,7 +144,8 @@ bool loadLevel(int arr[][COLS])
 
     if (fileRows != ROWS || fileCols != COLS)
     {
-        std::cout << "Wrong Level Size\n";
+        levelError = "level.txt has the wrong size";
+        std::cout << levelError << "\n";
         return false;
     }
 
@@ -155,7 +158,8 @@ bool loadLevel(int arr[][COLS])
         {
             if (!(fin >> level[r][c]) || !validBrickValue(level[r][c]))
             {
-                std::cout << "Wrong Brick Value\n";
+                levelError = "level.txt has a wrong brick value";
+                std::cout << levelError << "\n";
                 return false;
             }
         }
@@ -172,13 +176,8 @@ bool loadLevel(int arr[][COLS])
     return true;
 }
 
-bool loadResources(sf::Font &font)
+bool loadFont(sf::Font &font)
 {
-    if (!loadLevel(bricks))
-    {
-        return false;
-    }
-
     if (!font.openFromFile("arial.ttf"))
     {
         std::cout << "Font not Loaded!\n";
@@ -217,6 +216,10 @@ int toGameKey(sf::Keyboard::Key code)
     return KEY_NONE;
 }
 
+// Defined later in the file, handleInput calls it after reading the keys
+void handleStateInput(sf::RenderWindow &window);
+
+// Input: reads the keys, then handles what they mean in the current state
 void handleInput(sf::RenderWindow &window)
 {
     // No key pressed unless the event loop finds one
@@ -233,6 +236,8 @@ void handleInput(sf::RenderWindow &window)
             pressedKey = toGameKey(key->code);
         }
     }
+
+    handleStateInput(window);
 }
 
 // ============================================================
@@ -1082,6 +1087,33 @@ void drawGame(sf::RenderWindow &window, const sf::Font &font)
 }
 
 // ============================================================
+// Error screen
+// ============================================================
+
+// Shows an error text in the window until the window is closed
+void showError(sf::RenderWindow &window, const sf::Font &font,
+               const std::string &message)
+{
+    while (window.isOpen())
+    {
+        while (const std::optional event = window.pollEvent())
+        {
+            if (event->is<sf::Event::Closed>())
+            {
+                window.close();
+            }
+        }
+
+        window.clear(sf::Color(15, 15, 35));
+        drawCenteredText(window, font, "ERROR", 56, 240.f, sf::Color(255, 75, 105));
+        drawCenteredText(window, font, message, 24, 330.f);
+        drawCenteredText(window, font, "Close the window to exit", 18, 400.f,
+                         sf::Color(170, 170, 210));
+        window.display();
+    }
+}
+
+// ============================================================
 // Main
 // ============================================================
 
@@ -1097,19 +1129,25 @@ int main()
     // One KeyPressed event per press, so the menu moves one step at a time
     window.setKeyRepeatEnabled(false);
 
-    // Setting up level and font
+    // Without the font no text can be shown, so only the console tells
     sf::Font font;
 
-    if (!loadResources(font))
+    if (!loadFont(font))
     {
         return -1;
     }
 
-    // Game loop
+    // A missing or wrong level file shows an error in the window
+    if (!loadLevel(bricks))
+    {
+        showError(window, font, levelError);
+        return -1;
+    }
+
+    // Game loop: input, update, draw
     while (window.isOpen())
     {
         handleInput(window);
-        handleStateInput(window);
         updateGame();
         drawGame(window, font);
     }
